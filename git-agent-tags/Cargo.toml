@@ -1,0 +1,20 @@
+[package]
+name = "git-agent-headers"
+version = "0.1.0"
+edition = "2021"
+description = "Manage per-file @agents context headers in codebases"
+
+[[bin]]
+name = "git-agent-headers"
+path = "src/main.rs"
+
+[dependencies]
+git2 = "0.19"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+regex = "1"
+colored = "2"
+toml = "0.8"
+walkdir = "2"
+anyhow = "1"
