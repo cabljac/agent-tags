@@ -2,7 +2,7 @@
  * @agents
  * Reference graph built from @agents Related:/See: links.
  * Nodes = files with headers, edges = typed references.
- * Related: git-agent-headers/src/parser.rs, git-agent-headers/src/cache.rs, git-agent-headers/src/check.rs
+ * Related: git-agent-tags/src/parser.rs, git-agent-tags/src/cache.rs, git-agent-tags/src/check.rs
  */
 
 use std::collections::{HashMap, HashSet};
@@ -20,6 +20,12 @@ pub struct GraphNode {
 pub struct ReferenceGraph {
     /// file path → node
     nodes: HashMap<String, GraphNode>,
+    /// file path → set of named tag names defined in that file
+    #[serde(default)]
+    tag_names: HashMap<String, HashSet<String>>,
+    /// Reverse index: target file (base path, no fragment) → source files that reference it
+    #[serde(skip)]
+    reverse: HashMap<String, Vec<String>>,
 }
 
 impl ReferenceGraph {
@@ -28,7 +34,24 @@ impl ReferenceGraph {
     }
 
     pub fn add_node(&mut self, node: GraphNode) {
+        for r in node.related.iter().chain(node.see.iter()) {
+            if r.starts_with("http://") || r.starts_with("https://") {
+                continue;
+            }
+            let base = r.split_once('#').map_or(r.as_str(), |(b, _)| b);
+            self.reverse
+                .entry(base.to_string())
+                .or_default()
+                .push(node.file.clone());
+        }
         self.nodes.insert(node.file.clone(), node);
+    }
+
+    /// Register the set of named tags defined in a file, for fragment validation.
+    pub fn register_tag_names(&mut self, file: &str, names: HashSet<String>) {
+        if !names.is_empty() {
+            self.tag_names.insert(file.to_string(), names);
+        }
     }
 
     /// Files that this file points to (outgoing edges).
@@ -43,13 +66,9 @@ impl ReferenceGraph {
         }
     }
 
-    /// Files that point to this file (incoming edges).
+    /// Files that point to this file (incoming edges). O(1) via reverse index.
     pub fn dependents(&self, file: &str) -> Vec<String> {
-        self.nodes
-            .values()
-            .filter(|n| n.related.contains(&file.to_string()) || n.see.contains(&file.to_string()))
-            .map(|n| n.file.clone())
-            .collect()
+        self.reverse.get(file).cloned().unwrap_or_default()
     }
 
     /// Files with headers but no incoming or outgoing links.
@@ -62,7 +81,7 @@ impl ReferenceGraph {
             .collect()
     }
 
-    /// Edges pointing to files that don't exist in the graph (or don't exist on disk).
+    /// Edges pointing to files that don't exist or fragments that don't resolve.
     /// Returns (source_file, broken_ref).
     pub fn broken_refs(&self, existing_files: &HashSet<String>) -> Vec<(String, String)> {
         let mut broken = Vec::new();
@@ -72,8 +91,26 @@ impl ReferenceGraph {
                 if r.starts_with("http://") || r.starts_with("https://") {
                     continue;
                 }
-                if !existing_files.contains(r.as_str()) && !self.nodes.contains_key(r.as_str()) {
+                // Split on # for fragment references
+                let (base_path, fragment) = match r.split_once('#') {
+                    Some((base, frag)) => (base, Some(frag)),
+                    None => (r.as_str(), None),
+                };
+
+                let file_exists =
+                    existing_files.contains(base_path) || self.nodes.contains_key(base_path);
+
+                if !file_exists {
                     broken.push((node.file.clone(), r.clone()));
+                } else if let Some(frag) = fragment {
+                    // File exists — validate the fragment
+                    let frag_valid = self
+                        .tag_names
+                        .get(base_path)
+                        .map_or(false, |names| names.contains(frag));
+                    if !frag_valid {
+                        broken.push((node.file.clone(), r.clone()));
+                    }
                 }
             }
         }
@@ -183,6 +220,69 @@ mod tests {
             see: vec![],
         });
         let deps = g.dependents("spec.ts");
+        assert!(deps.contains(&"consumer.ts".to_string()));
+    }
+
+    #[test]
+    fn test_fragment_ref_valid() {
+        let mut g = ReferenceGraph::new();
+        g.add_node(GraphNode {
+            file: "consumer.ts".into(),
+            related: vec!["auth.ts#token-check".into()],
+            see: vec![],
+        });
+        g.register_tag_names("auth.ts", HashSet::from(["token-check".to_string()]));
+        let existing: HashSet<String> = ["consumer.ts", "auth.ts"]
+            .iter().map(|s| s.to_string()).collect();
+        let broken = g.broken_refs(&existing);
+        assert!(broken.is_empty(), "Valid fragment ref should not be broken");
+    }
+
+    #[test]
+    fn test_fragment_ref_broken_fragment() {
+        let mut g = ReferenceGraph::new();
+        g.add_node(GraphNode {
+            file: "consumer.ts".into(),
+            related: vec!["auth.ts#nonexistent".into()],
+            see: vec![],
+        });
+        g.register_tag_names("auth.ts", HashSet::from(["token-check".to_string()]));
+        let existing: HashSet<String> = ["consumer.ts", "auth.ts"]
+            .iter().map(|s| s.to_string()).collect();
+        let broken = g.broken_refs(&existing);
+        assert_eq!(broken.len(), 1);
+        assert_eq!(broken[0].1, "auth.ts#nonexistent");
+    }
+
+    #[test]
+    fn test_fragment_ref_missing_file() {
+        let mut g = ReferenceGraph::new();
+        g.add_node(GraphNode {
+            file: "consumer.ts".into(),
+            related: vec!["missing.ts#tag".into()],
+            see: vec![],
+        });
+        let existing: HashSet<String> = ["consumer.ts"]
+            .iter().map(|s| s.to_string()).collect();
+        let broken = g.broken_refs(&existing);
+        assert_eq!(broken.len(), 1);
+        assert_eq!(broken[0].1, "missing.ts#tag");
+    }
+
+    #[test]
+    fn test_dependents_with_fragment_ref() {
+        let mut g = ReferenceGraph::new();
+        g.add_node(GraphNode {
+            file: "consumer.ts".into(),
+            related: vec!["auth.ts#token-check".into()],
+            see: vec![],
+        });
+        g.add_node(GraphNode {
+            file: "auth.ts".into(),
+            related: vec![],
+            see: vec![],
+        });
+        let deps = g.dependents("auth.ts");
         assert!(deps.contains(&"consumer.ts".to_string()));
     }
 

@@ -2,7 +2,7 @@
  * @agents
  * Extracts @agents blocks from source files.
  * Handles all supported comment styles based on file extension.
- * Related: git-agent-headers/src/graph.rs, git-agent-headers/src/cache.rs
+ * Related: git-agent-tags/src/graph.rs, git-agent-tags/src/cache.rs
  */
 
 use std::path::Path;
@@ -11,6 +11,8 @@ use std::path::Path;
 pub struct AgentsBlock {
     /// The raw header text (entire comment block)
     pub raw: String,
+    /// Optional tag name from `@agents(name)`
+    pub name: Option<String>,
     /// Free-form description lines
     pub body: Vec<String>,
     /// File paths from Related: lines
@@ -65,6 +67,8 @@ pub enum TagKind {
 #[derive(Debug, Clone)]
 pub struct AgentsTag {
     pub file: String,
+    /// Optional tag name from `@agents(name)` or `@agents(name):`.
+    pub name: Option<String>,
     /// 1-indexed line number where this tag starts.
     pub line: usize,
     /// Annotation text lines. For FileHeader, reconstructed from the AgentsBlock fields.
@@ -122,7 +126,7 @@ pub fn parse_all_agents_tags(content: &str, file_path: &Path) -> Vec<AgentsTag> 
         // Strip the comment prefix to get the content.
         let content_opt = strip_comment_prefix(trimmed, prefix, style);
         if let Some(comment_content) = content_opt {
-            if let Some(rest) = comment_content.strip_prefix("@agents:") {
+            if let Some((inline_name, rest)) = parse_inline_marker(comment_content) {
                 let first_text = rest.trim().to_string();
                 let tag_start = line_no;
                 let mut text = vec![first_text];
@@ -137,8 +141,8 @@ pub fn parse_all_agents_tags(content: &str, file_path: &Path) -> Vec<AgentsTag> 
                     match strip_comment_prefix(next, prefix, style) {
                         None => break,
                         Some(c) => {
-                            // Stop if the next line is itself an @agents: tag.
-                            if c.starts_with("@agents:") {
+                            // Stop if the next line is itself an @agents tag.
+                            if parse_inline_marker(c).is_some() {
                                 break;
                             }
                             text.push(c.to_string());
@@ -149,6 +153,7 @@ pub fn parse_all_agents_tags(content: &str, file_path: &Path) -> Vec<AgentsTag> 
 
                 tags.push(AgentsTag {
                     file: String::new(),
+                    name: inline_name,
                     line: tag_start,
                     text,
                     kind: TagKind::Inline,
@@ -178,6 +183,7 @@ fn agents_block_to_tag(block: &AgentsBlock) -> AgentsTag {
 
     AgentsTag {
         file: String::new(),
+        name: block.name.clone(),
         line: block.start_line,
         text,
         kind: TagKind::FileHeader,
@@ -185,7 +191,8 @@ fn agents_block_to_tag(block: &AgentsBlock) -> AgentsTag {
 }
 
 /// Strip a comment prefix from a trimmed line, returning the inner content if it matched.
-/// For CStyle, also handles block-comment inner lines (leading `*`).
+/// For CStyle, also handles block-comment inner lines (leading `*`) and
+/// single-line block comments (`/* content */`).
 fn strip_comment_prefix<'a>(
     trimmed: &'a str,
     prefix: &str,
@@ -194,11 +201,22 @@ fn strip_comment_prefix<'a>(
     if let Some(rest) = trimmed.strip_prefix(prefix) {
         return Some(rest.trim());
     }
-    // For C-style, also match block-comment inner lines: `* content` or `*/`
     if style == CommentStyle::CStyle {
+        // Single-line block comment: `/* content */`
+        if (trimmed.starts_with("/*") && !trimmed.starts_with("/**"))
+            && trimmed.ends_with("*/")
+        {
+            let inner = trimmed
+                .strip_prefix("/*")?
+                .strip_suffix("*/")?
+                .trim();
+            if !inner.is_empty() {
+                return Some(inner);
+            }
+        }
+        // Block-comment inner lines: `* content` or `*/`
         if let Some(rest) = trimmed.strip_prefix('*') {
             let inner = rest.trim();
-            // Skip bare closing `*/`
             if inner == "/" || inner.is_empty() {
                 return None;
             }
@@ -208,28 +226,61 @@ fn strip_comment_prefix<'a>(
     None
 }
 
-/// Returns true only if the comment line content is exactly the block-header marker `@agents`.
-/// This distinguishes it from the inline form `@agents: text`.
-fn is_block_marker(line: &str, comment_prefix: &str) -> bool {
-    // Strip the comment prefix (// or # or --) and check for exact match.
-    if let Some(rest) = line.strip_prefix(comment_prefix) {
-        return rest.trim() == "@agents";
-    }
-    // Block comment inner lines start with `*`.
-    if let Some(rest) = line.strip_prefix('*') {
-        return rest.trim() == "@agents";
-    }
-    // Opening line of a block comment may include the marker inline: `/** @agents`.
-    if line.starts_with("/**") || line.starts_with("/*") {
-        let inner = line
-            .trim_start_matches('/')
+/// Check if a line contains the block-header marker `@agents` or `@agents(name)`.
+/// Returns `None` if no match, `Some(None)` for unnamed, `Some(Some(name))` for named.
+/// This distinguishes it from the inline form `@agents:` / `@agents(name):`.
+fn is_block_marker(line: &str, comment_prefix: &str) -> Option<Option<String>> {
+    let inner = if let Some(rest) = line.strip_prefix(comment_prefix) {
+        rest.trim()
+    } else if let Some(rest) = line.strip_prefix('*') {
+        rest.trim()
+    } else if line.starts_with("/**") || line.starts_with("/*") {
+        line.trim_start_matches('/')
             .trim_start_matches('*')
             .trim_end_matches('/')
             .trim_end_matches('*')
-            .trim();
-        return inner == "@agents";
+            .trim()
+    } else {
+        return None;
+    };
+
+    parse_agents_marker(inner)
+}
+
+/// Parse an `@agents` or `@agents(name)` marker (without colon — file header form).
+/// Returns `None` if no match, `Some(None)` for unnamed, `Some(Some(name))` for named.
+fn parse_agents_marker(s: &str) -> Option<Option<String>> {
+    if s == "@agents" {
+        return Some(None);
     }
-    false
+    if let Some(rest) = s.strip_prefix("@agents(") {
+        if let Some(name) = rest.strip_suffix(')') {
+            let name = name.trim();
+            if !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+                return Some(Some(name.to_string()));
+            }
+        }
+    }
+    None
+}
+
+/// Parse an `@agents:` or `@agents(name):` inline marker.
+/// Returns `Some((name, rest_of_line))` on match.
+fn parse_inline_marker(s: &str) -> Option<(Option<String>, &str)> {
+    if let Some(rest) = s.strip_prefix("@agents:") {
+        return Some((None, rest));
+    }
+    if let Some(rest) = s.strip_prefix("@agents(") {
+        if let Some(paren_end) = rest.find("):") {
+            let name = &rest[..paren_end];
+            let name = name.trim();
+            if !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+                let after_colon = &rest[paren_end + 2..];
+                return Some((Some(name.to_string()), after_colon));
+            }
+        }
+    }
+    None
 }
 
 /// Parse an @agents block from source text.
@@ -266,37 +317,39 @@ fn parse_c_style(lines: &[&str], limit: usize) -> Option<AgentsBlock> {
         if trimmed.starts_with("/**") || trimmed.starts_with("/*") {
             let start = i + 1;
             let mut block_lines: Vec<String> = Vec::new();
-            let mut found_marker = false;
+            let mut found_name: Option<Option<String>> = None;
 
             // Check if @agents is on the opening line
-            if is_block_marker(trimmed, "//") {
-                found_marker = true;
+            if let Some(name) = is_block_marker(trimmed, "//") {
+                found_name = Some(name);
             }
             block_lines.push(trimmed.to_string());
 
             let mut j = i + 1;
             while j < lines.len() {
                 let bl = lines[j].trim();
-                if is_block_marker(bl, "//") {
-                    found_marker = true;
+                if found_name.is_none() {
+                    if let Some(name) = is_block_marker(bl, "//") {
+                        found_name = Some(name);
+                    }
                 }
                 if bl.ends_with("*/") || bl == "*/" {
                     block_lines.push(bl.to_string());
-                    if found_marker {
+                    if let Some(name) = found_name {
                         let raw = block_lines.join("\n");
                         let body_lines = extract_inner_lines_block(&block_lines);
-                        return Some(build_block(raw, body_lines, start, j + 1));
+                        return Some(build_block(raw, name, body_lines, start, j + 1));
                     }
                     break;
                 }
                 block_lines.push(bl.to_string());
                 j += 1;
             }
-            if found_marker && j >= lines.len() {
-                // Unclosed block — treat up to end
+            if found_name.is_some() && j >= lines.len() {
+                let name = found_name.unwrap();
                 let raw = block_lines.join("\n");
                 let body_lines = extract_inner_lines_block(&block_lines);
-                return Some(build_block(raw, body_lines, start, j));
+                return Some(build_block(raw, name, body_lines, start, j));
             }
         }
 
@@ -304,7 +357,8 @@ fn parse_c_style(lines: &[&str], limit: usize) -> Option<AgentsBlock> {
         if trimmed.starts_with("//") {
             let start = i + 1;
             let mut block_lines: Vec<String> = vec![trimmed.to_string()];
-            let mut found_marker = is_block_marker(trimmed, "//");
+            let mut found_name: Option<Option<String>> =
+                is_block_marker(trimmed, "//").map(Some).unwrap_or(None);
             let mut j = i + 1;
 
             while j < lines.len() {
@@ -312,18 +366,19 @@ fn parse_c_style(lines: &[&str], limit: usize) -> Option<AgentsBlock> {
                 if !bl.starts_with("//") {
                     break;
                 }
-                // Only accept @agents marker if still within limit
-                if j < limit && is_block_marker(bl, "//") {
-                    found_marker = true;
+                if j < limit && found_name.is_none() {
+                    if let Some(name) = is_block_marker(bl, "//") {
+                        found_name = Some(name);
+                    }
                 }
                 block_lines.push(bl.to_string());
                 j += 1;
             }
 
-            if found_marker {
+            if let Some(name) = found_name {
                 let raw = block_lines.join("\n");
                 let body_lines = extract_inner_lines_line_comment(&block_lines, "//");
-                return Some(build_block(raw, body_lines, start, j));
+                return Some(build_block(raw, name, body_lines, start, j));
             }
         }
 
@@ -345,7 +400,8 @@ fn parse_line_comment(lines: &[&str], limit: usize, style: CommentStyle) -> Opti
         if trimmed.starts_with(prefix) {
             let start = i + 1;
             let mut block_lines: Vec<String> = vec![trimmed.to_string()];
-            let mut found_marker = is_block_marker(trimmed, prefix);
+            let mut found_name: Option<Option<String>> =
+                is_block_marker(trimmed, prefix).map(Some).unwrap_or(None);
             let mut j = i + 1;
 
             while j < lines.len() {
@@ -354,18 +410,20 @@ fn parse_line_comment(lines: &[&str], limit: usize, style: CommentStyle) -> Opti
                     break;
                 }
                 if bl.starts_with(prefix) {
-                    if j < limit && is_block_marker(bl, prefix) {
-                        found_marker = true;
+                    if j < limit && found_name.is_none() {
+                        if let Some(name) = is_block_marker(bl, prefix) {
+                            found_name = Some(name);
+                        }
                     }
                     block_lines.push(bl.to_string());
                 }
                 j += 1;
             }
 
-            if found_marker {
+            if let Some(name) = found_name {
                 let raw = block_lines.join("\n");
                 let body_lines = extract_inner_lines_line_comment(&block_lines, prefix);
-                return Some(build_block(raw, body_lines, start, j));
+                return Some(build_block(raw, name, body_lines, start, j));
             }
         }
         i += 1;
@@ -385,18 +443,18 @@ fn parse_python_docstring(lines: &[&str], limit: usize) -> Option<AgentsBlock> {
             };
             let start = i + 1;
             let mut block_lines: Vec<String> = vec![trimmed.to_string()];
-            let mut found_marker = trimmed.contains("@agents") && !trimmed.contains("@agents:");
+            let mut found_name: Option<Option<String>> = extract_docstring_marker(trimmed);
 
             // Single-line docstring
             let after_open = &trimmed[3..];
             if after_open.contains(delim) {
-                if found_marker {
+                if let Some(name) = found_name {
                     let raw = trimmed.to_string();
                     let body = vec![after_open
                         .trim_end_matches(delim)
                         .trim()
                         .to_string()];
-                    return Some(build_block(raw, body, start, i + 1));
+                    return Some(build_block(raw, name, body, start, i + 1));
                 }
                 i += 1;
                 continue;
@@ -405,15 +463,15 @@ fn parse_python_docstring(lines: &[&str], limit: usize) -> Option<AgentsBlock> {
             let mut j = i + 1;
             while j < lines.len() {
                 let bl = lines[j].trim();
-                if bl.contains("@agents") && !bl.contains("@agents:") {
-                    found_marker = true;
+                if found_name.is_none() {
+                    found_name = extract_docstring_marker(bl);
                 }
                 block_lines.push(bl.to_string());
                 if bl.ends_with(delim) || bl == delim {
-                    if found_marker {
+                    if let Some(name) = found_name {
                         let raw = block_lines.join("\n");
                         let body_lines = extract_inner_lines_docstring(&block_lines, delim);
-                        return Some(build_block(raw, body_lines, start, j + 1));
+                        return Some(build_block(raw, name, body_lines, start, j + 1));
                     }
                     break;
                 }
@@ -421,6 +479,41 @@ fn parse_python_docstring(lines: &[&str], limit: usize) -> Option<AgentsBlock> {
             }
         }
         i += 1;
+    }
+    None
+}
+
+/// Extract `@agents` or `@agents(name)` marker from a docstring line.
+/// Returns `None` if no marker found (not `Some(None)`).
+fn extract_docstring_marker(line: &str) -> Option<Option<String>> {
+    // Find @agents in the line, but not @agents: (inline form)
+    if !line.contains("@agents") || line.contains("@agents:") {
+        return None;
+    }
+    // Try to extract the marker
+    if let Some(pos) = line.find("@agents") {
+        let remainder = &line[pos..];
+        // Try @agents(name) first
+        if let Some(rest) = remainder.strip_prefix("@agents(") {
+            if let Some(paren_end) = rest.find(')') {
+                let name = &rest[..paren_end];
+                let name = name.trim();
+                if !name.is_empty()
+                    && name
+                        .chars()
+                        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+                {
+                    return Some(Some(name.to_string()));
+                }
+            }
+        }
+        // Plain @agents (check it's not followed by more alphanumeric chars)
+        let after = &remainder["@agents".len()..];
+        if after.is_empty()
+            || after.starts_with(|c: char| !c.is_alphanumeric() && c != '(')
+        {
+            return Some(None);
+        }
     }
     None
 }
@@ -464,12 +557,11 @@ fn extract_inner_lines_docstring(lines: &[String], delim: &str) -> Vec<String> {
                 .trim()
                 .to_string()
         })
-        .filter(|l| !l.is_empty() || true) // keep all, filter later
         .collect()
 }
 
 /// Build an AgentsBlock from extracted inner lines.
-fn build_block(raw: String, inner: Vec<String>, start_line: usize, end_line: usize) -> AgentsBlock {
+fn build_block(raw: String, name: Option<String>, inner: Vec<String>, start_line: usize, end_line: usize) -> AgentsBlock {
     let mut body = Vec::new();
     let mut related = Vec::new();
     let mut see = Vec::new();
@@ -477,7 +569,7 @@ fn build_block(raw: String, inner: Vec<String>, start_line: usize, end_line: usi
 
     for line in &inner {
         let t = line.trim();
-        if t.is_empty() || t == "@agents" {
+        if t.is_empty() || t == "@agents" || parse_agents_marker(t).is_some() {
             continue;
         }
         if let Some(rest) = t.strip_prefix("Related:") {
@@ -507,6 +599,7 @@ fn build_block(raw: String, inner: Vec<String>, start_line: usize, end_line: usi
 
     AgentsBlock {
         raw,
+        name,
         body,
         related,
         see,
@@ -520,7 +613,11 @@ fn build_block(raw: String, inner: Vec<String>, start_line: usize, end_line: usi
 #[allow(dead_code)]
 pub fn generate_header(block: &AgentsBlock, ext: &str) -> String {
     let style = comment_style(ext);
-    let mut lines: Vec<String> = vec!["@agents".to_string()];
+    let marker = match &block.name {
+        Some(name) => format!("@agents({})", name),
+        None => "@agents".to_string(),
+    };
+    let mut lines: Vec<String> = vec![marker];
     lines.extend(block.body.clone());
     if !block.related.is_empty() {
         lines.push(format!("Related: {}", block.related.join(", ")));
@@ -638,6 +735,7 @@ export function refresh() {}"#;
     fn test_generate_header_ts() {
         let block = AgentsBlock {
             raw: String::new(),
+            name: None,
             body: vec!["OAuth PKCE flow.".to_string()],
             related: vec!["auth-guard.ts".to_string()],
             see: vec![],
@@ -655,6 +753,7 @@ export function refresh() {}"#;
     fn test_generate_header_python() {
         let block = AgentsBlock {
             raw: String::new(),
+            name: None,
             body: vec!["Pipeline entry.".to_string()],
             related: vec!["transform.py".to_string()],
             see: vec![],
@@ -672,6 +771,7 @@ export function refresh() {}"#;
     fn test_generate_header_lua() {
         let block = AgentsBlock {
             raw: String::new(),
+            name: None,
             body: vec!["Core module.".to_string()],
             related: vec![],
             see: vec![],
@@ -844,5 +944,123 @@ function foo() {
         let inline: Vec<_> = tags.iter().filter(|t| t.kind == TagKind::Inline).collect();
         assert_eq!(inline.len(), 1);
         assert_eq!(inline[0].text, vec!["Implementation note about this function."]);
+    }
+
+    // --- Single-line block comment inline tags ---
+
+    #[test]
+    fn test_single_line_block_comment_inline() {
+        let src = "code;\n/* @agents: This is a note. */\nmore code;";
+        let tags = parse_all_agents_tags(src, Path::new("foo.ts"));
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].kind, TagKind::Inline);
+        assert_eq!(tags[0].text, vec!["This is a note."]);
+    }
+
+    #[test]
+    fn test_single_line_block_comment_named_inline() {
+        let src = "code;\n/* @agents(note-1): Important constraint. */\nmore;";
+        let tags = parse_all_agents_tags(src, Path::new("foo.ts"));
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].name, Some("note-1".to_string()));
+        assert_eq!(tags[0].text, vec!["Important constraint."]);
+    }
+
+    // --- Named tag tests ---
+
+    #[test]
+    fn test_named_file_header_block_comment() {
+        let src = r#"/**
+ * @agents(auth-module)
+ * OAuth PKCE flow.
+ * Related: guard.ts
+ */
+export function login() {}"#;
+        let block = parse_agents_block(src, Path::new("auth.ts")).unwrap();
+        assert_eq!(block.name, Some("auth-module".to_string()));
+        assert!(block.body[0].contains("OAuth PKCE"));
+        assert_eq!(block.related, vec!["guard.ts"]);
+    }
+
+    #[test]
+    fn test_named_file_header_line_comment() {
+        let src = "// @agents(token-refresh)\n// Token refresh logic.\n// Related: cookie.ts\n\ncode;";
+        let block = parse_agents_block(src, Path::new("token.ts")).unwrap();
+        assert_eq!(block.name, Some("token-refresh".to_string()));
+        assert!(block.body[0].contains("Token refresh"));
+    }
+
+    #[test]
+    fn test_named_file_header_hash_comment() {
+        let src = "# @agents(pipeline-entry)\n# Main pipeline.\n\ndef run(): pass";
+        let block = parse_agents_block(src, Path::new("main.py")).unwrap();
+        assert_eq!(block.name, Some("pipeline-entry".to_string()));
+    }
+
+    #[test]
+    fn test_unnamed_file_header_has_no_name() {
+        let src = "/**\n * @agents\n * Description.\n */\ncode;";
+        let block = parse_agents_block(src, Path::new("foo.ts")).unwrap();
+        assert_eq!(block.name, None);
+    }
+
+    #[test]
+    fn test_named_inline_tag() {
+        let src = "code;\n// @agents(token-check): Must validate before refresh.\nmore code;";
+        let tags = parse_all_agents_tags(src, Path::new("foo.ts"));
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].kind, TagKind::Inline);
+        assert_eq!(tags[0].name, Some("token-check".to_string()));
+        assert_eq!(tags[0].text, vec!["Must validate before refresh."]);
+    }
+
+    #[test]
+    fn test_unnamed_inline_tag_has_no_name() {
+        let src = "code;\n// @agents: A note.\nmore;";
+        let tags = parse_all_agents_tags(src, Path::new("foo.ts"));
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].name, None);
+    }
+
+    #[test]
+    fn test_named_inline_tag_python() {
+        let src = "x = 1\n# @agents(cache-key): Must include path.\ny = 2";
+        let tags = parse_all_agents_tags(src, Path::new("foo.py"));
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].name, Some("cache-key".to_string()));
+    }
+
+    #[test]
+    fn test_named_header_and_named_inline() {
+        let src = r#"/**
+ * @agents(auth-module)
+ * File description.
+ */
+
+const x = 1;
+// @agents(token-check): Inline note.
+const y = 2;"#;
+        let tags = parse_all_agents_tags(src, Path::new("foo.ts"));
+        assert_eq!(tags.len(), 2);
+        assert_eq!(tags[0].name, Some("auth-module".to_string()));
+        assert_eq!(tags[0].kind, TagKind::FileHeader);
+        assert_eq!(tags[1].name, Some("token-check".to_string()));
+        assert_eq!(tags[1].kind, TagKind::Inline);
+    }
+
+    #[test]
+    fn test_generate_header_with_name() {
+        let block = AgentsBlock {
+            raw: String::new(),
+            name: Some("auth-module".to_string()),
+            body: vec!["Auth module.".to_string()],
+            related: vec![],
+            see: vec![],
+            warnings: vec![],
+            start_line: 1,
+            end_line: 3,
+        };
+        let out = generate_header(&block, "ts");
+        assert!(out.contains("@agents(auth-module)"));
     }
 }

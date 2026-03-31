@@ -1,11 +1,11 @@
 [package]
-name = "git-agent-headers"
+name = "git-agent-tags"
 version = "0.1.0"
 edition = "2021"
-description = "Manage per-file @agents context headers in codebases"
+description = "Parse and validate @agents tags in codebases"
 
 [[bin]]
-name = "git-agent-headers"
+name = "git-agent-tags"
 path = "src/main.rs"
 
 [dependencies]
@@ -18,3 +18,4 @@ colored = "2"
 toml = "0.8"
 walkdir = "2"
 anyhow = "1"
+glob = "0.3"

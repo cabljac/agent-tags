@@ -1,7 +1,7 @@
 /**
  * @agents
- * Configuration loading from .git-agent-headers.toml or defaults.
- * Related: git-agent-headers/src/main.rs, git-agent-headers/src/check.rs, git-agent-headers/src/fix.rs
+ * Configuration loading from .git-agent-tags.toml or defaults.
+ * Related: git-agent-tags/src/main.rs, git-agent-tags/src/check.rs
  */
 
 use serde::{Deserialize, Serialize};
@@ -86,7 +86,7 @@ impl Default for Config {
 }
 
 pub fn load_config(repo_root: &Path) -> Config {
-    let config_path = repo_root.join(".git-agent-headers.toml");
+    let config_path = repo_root.join(".git-agent-tags.toml");
     if config_path.exists() {
         if let Ok(content) = std::fs::read_to_string(&config_path) {
             if let Ok(mut cfg) = toml::from_str::<Config>(&content) {
@@ -133,6 +133,20 @@ mod tests {
     }
 
     #[test]
+    fn test_ignore_double_star_glob() {
+        let patterns = vec!["**/*.test.ts".to_string()];
+        assert!(is_ignored("src/deep/nested/auth.test.ts", &patterns));
+        assert!(!is_ignored("src/deep/nested/auth.ts", &patterns));
+    }
+
+    #[test]
+    fn test_ignore_question_mark_glob() {
+        let patterns = vec!["?.ts".to_string()];
+        assert!(is_ignored("a.ts", &patterns));
+        assert!(!is_ignored("ab.ts", &patterns));
+    }
+
+    #[test]
     fn test_ignore_is_additive_with_defaults() {
         // Simulate what load_config does when a user provides an ignore list
         let mut cfg = Config {
@@ -157,17 +171,25 @@ mod tests {
 }
 
 /// Check if a file path should be ignored given the config patterns.
-/// Patterns are matched against path components (split by `/`), so "build"
-/// matches "build/foo.rs" but not "src/rebuild.rs".
-/// Glob patterns like "*.test.ts" are matched against the full filename.
+///
+/// Pattern types:
+/// - Plain name (e.g., `build`): matches any exact path component
+/// - Glob with wildcards (e.g., `*.test.ts`, `**/*.spec.ts`): matched against
+///   the full path using the `glob` crate's `Pattern`
 pub fn is_ignored(path: &str, ignore_patterns: &[String]) -> bool {
     let components: Vec<&str> = path.split('/').collect();
     for pattern in ignore_patterns {
-        // Glob: *.ext matched against the filename only
-        if let Some(suffix) = pattern.strip_prefix("*.") {
-            if let Some(filename) = components.last() {
-                if filename.ends_with(&format!(".{}", suffix)) || *filename == suffix {
+        if pattern.contains('*') || pattern.contains('?') || pattern.contains('[') {
+            // Glob pattern — match against the full path
+            if let Ok(pat) = glob::Pattern::new(pattern) {
+                if pat.matches(path) {
                     return true;
+                }
+                // Also try matching against just the filename for simple globs like *.md
+                if let Some(filename) = components.last() {
+                    if pat.matches(filename) {
+                        return true;
+                    }
                 }
             }
             continue;

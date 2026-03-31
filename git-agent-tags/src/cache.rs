@@ -1,8 +1,8 @@
 /**
  * @agents
- * Index cache stored in .git/agent-headers/index.json.
+ * Index cache stored in .git/agent-tags/index.json.
  * Derived from parsing all files; rebuilt on demand, not committed.
- * Related: git-agent-headers/src/parser.rs, git-agent-headers/src/graph.rs
+ * Related: git-agent-tags/src/parser.rs, git-agent-tags/src/graph.rs
  */
 
 use anyhow::{Context, Result};
@@ -19,10 +19,21 @@ pub struct CachedFile {
     pub has_header: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub header: Option<CachedHeader>,
+    /// File modification time (seconds since epoch) for cache invalidation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mtime_secs: Option<i64>,
+    /// File size in bytes for cache invalidation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_size: Option<u64>,
+    /// Named tag names in this file (for fragment validation from cache).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tag_names: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedHeader {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     pub body: Vec<String>,
     pub related: Vec<String>,
     pub see: Vec<String>,
@@ -52,7 +63,6 @@ impl Index {
         self.files.insert(file.path.clone(), file);
     }
 
-    #[allow(dead_code)]
     pub fn get(&self, path: &str) -> Option<&CachedFile> {
         self.files.get(path)
     }
@@ -68,14 +78,13 @@ impl Index {
 
 /// Resolve the cache directory from the repo root.
 pub fn cache_dir(git_dir: &Path) -> PathBuf {
-    git_dir.join("agent-headers")
+    git_dir.join("agent-tags")
 }
 
 pub fn index_path(git_dir: &Path) -> PathBuf {
     cache_dir(git_dir).join("index.json")
 }
 
-#[allow(dead_code)]
 pub fn load_index(git_dir: &Path) -> Result<Index> {
     let path = index_path(git_dir);
     if !path.exists() {
@@ -99,6 +108,7 @@ pub fn save_index(git_dir: &Path, index: &Index) -> Result<()> {
 
 pub fn cached_header_from_block(block: &AgentsBlock) -> CachedHeader {
     CachedHeader {
+        name: block.name.clone(),
         body: block.body.clone(),
         related: block.related.clone(),
         see: block.see.clone(),

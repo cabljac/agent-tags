@@ -2,7 +2,7 @@
  * @agents
  * Git history queries via git2: blame, diff stats, rename detection.
  * Powers Tier 1 staleness detection in check.rs.
- * Related: git-agent-headers/src/check.rs, git-agent-headers/src/cache.rs
+ * Related: git-agent-tags/src/check.rs, git-agent-tags/src/cache.rs
  */
 
 use anyhow::{Context, Result};
@@ -117,6 +117,8 @@ impl GitRepo {
     }
 
     /// Percentage of lines changed between old_sha and HEAD for a file.
+    /// Can return values >100% for files where total insertions + deletions
+    /// exceeds the original line count (e.g., complete rewrites).
     pub fn diff_percent_since(&self, old_sha: &str, file: &str) -> Result<f64> {
         let old_oid = match git2::Oid::from_str(old_sha) {
             Ok(o) => o,
@@ -248,12 +250,16 @@ impl GitRepo {
     }
 
     /// Co-change analysis: returns map of (file_a, file_b) → commit count.
+    /// Uses interned string indices internally to avoid per-pair String clones.
     pub fn cochange_counts(
         &self,
         limit_commits: usize,
         max_files_per_commit: usize,
     ) -> Result<HashMap<(String, String), usize>> {
-        let mut counts: HashMap<(String, String), usize> = HashMap::new();
+        let mut file_to_idx: HashMap<String, usize> = HashMap::new();
+        let mut idx_to_file: Vec<String> = Vec::new();
+        let mut counts: HashMap<(usize, usize), usize> = HashMap::new();
+
         let mut revwalk = self.repo.revwalk()?;
         revwalk.push_head().ok();
         revwalk.set_sorting(git2::Sort::TIME)?;
@@ -279,13 +285,21 @@ impl GitRepo {
                 .repo
                 .diff_tree_to_tree(Some(&old_tree), Some(&new_tree), None)?;
 
-            let mut files: Vec<String> = Vec::new();
+            let mut file_indices: Vec<usize> = Vec::new();
             diff.foreach(
                 &mut |delta, _| {
                     if let Some(path) = delta.new_file().path() {
                         let p = path.to_string_lossy().to_string();
                         if !noisy_files.iter().any(|&n| p.ends_with(n)) {
-                            files.push(p);
+                            let idx = if let Some(&idx) = file_to_idx.get(&p) {
+                                idx
+                            } else {
+                                let idx = idx_to_file.len();
+                                idx_to_file.push(p.clone());
+                                file_to_idx.insert(p, idx);
+                                idx
+                            };
+                            file_indices.push(idx);
                         }
                     }
                     true
@@ -295,18 +309,18 @@ impl GitRepo {
                 None,
             )?;
 
-            if files.len() > max_files_per_commit {
+            if file_indices.len() > max_files_per_commit {
                 processed += 1;
                 continue;
             }
 
-            // Count all pairs
-            for i in 0..files.len() {
-                for j in (i + 1)..files.len() {
-                    let pair = if files[i] < files[j] {
-                        (files[i].clone(), files[j].clone())
+            // Count all pairs using cheap usize keys
+            for i in 0..file_indices.len() {
+                for j in (i + 1)..file_indices.len() {
+                    let pair = if file_indices[i] < file_indices[j] {
+                        (file_indices[i], file_indices[j])
                     } else {
-                        (files[j].clone(), files[i].clone())
+                        (file_indices[j], file_indices[i])
                     };
                     *counts.entry(pair).or_insert(0) += 1;
                 }
@@ -314,25 +328,39 @@ impl GitRepo {
 
             processed += 1;
         }
-        Ok(counts)
+
+        // Convert back to string pairs
+        let result = counts
+            .into_iter()
+            .map(|((a, b), count)| {
+                ((idx_to_file[a].clone(), idx_to_file[b].clone()), count)
+            })
+            .collect();
+        Ok(result)
     }
 
+    /// Check if a commit modified a file. For merge commits, checks diffs
+    /// against all parents to catch changes from any branch.
     fn commit_touches_file(&self, commit: &git2::Commit, file: &str) -> Result<bool> {
         if commit.parent_count() == 0 {
-            // Root commit: check if file exists in tree
             let tree = commit.tree()?;
             return Ok(tree.get_path(Path::new(file)).is_ok());
         }
-        let parent = commit.parent(0)?;
-        let old_tree = parent.tree()?;
         let new_tree = commit.tree()?;
+        for parent_idx in 0..commit.parent_count() {
+            let parent = commit.parent(parent_idx)?;
+            let old_tree = parent.tree()?;
 
-        let mut opts = DiffOptions::new();
-        opts.pathspec(file);
-        let diff =
-            self.repo
-                .diff_tree_to_tree(Some(&old_tree), Some(&new_tree), Some(&mut opts))?;
+            let mut opts = DiffOptions::new();
+            opts.pathspec(file);
+            let diff =
+                self.repo
+                    .diff_tree_to_tree(Some(&old_tree), Some(&new_tree), Some(&mut opts))?;
 
-        Ok(diff.deltas().count() > 0)
+            if diff.deltas().count() > 0 {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 }

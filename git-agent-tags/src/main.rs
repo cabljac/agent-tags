@@ -2,7 +2,7 @@
  * @agents
  * CLI entry point. Wires up clap commands to the underlying modules.
  * Each subcommand delegates to parser, graph, git, check, or cache.
- * Related: git-agent-headers/src/parser.rs, git-agent-headers/src/graph.rs, git-agent-headers/src/git.rs, git-agent-headers/src/check.rs, git-agent-headers/src/cache.rs, git-agent-headers/src/config.rs
+ * Related: git-agent-tags/src/parser.rs, git-agent-tags/src/graph.rs, git-agent-tags/src/git.rs, git-agent-tags/src/check.rs, git-agent-tags/src/cache.rs, git-agent-tags/src/config.rs
  */
 
 mod cache;
@@ -30,8 +30,8 @@ use parser::{AgentsTag, TagKind};
 
 #[derive(Parser)]
 #[command(
-    name = "git-agent-headers",
-    about = "Manage per-file @agents context headers in codebases",
+    name = "git-agent-tags",
+    about = "Parse and validate @agents tags in codebases",
     version
 )]
 struct Cli {
@@ -84,7 +84,7 @@ fn main() -> Result<()> {
         Command::Suggest => cmd_suggest(&workdir, &git_dir, &config, &repo),
         Command::Graph { file } => cmd_graph(&workdir, &git_dir, &config, &file),
         Command::Reindex => cmd_reindex(&workdir, &git_dir, &config),
-        Command::Context => cmd_build(&workdir, &config),
+        Command::Context => cmd_build(&workdir, &git_dir, &config),
     }
 }
 
@@ -94,8 +94,10 @@ fn main() -> Result<()> {
 
 fn build_index_and_graph(
     workdir: &Path,
+    git_dir: &Path,
     config: &Config,
 ) -> Result<(Index, ReferenceGraph, HashSet<String>)> {
+    let prev_index = cache::load_index(git_dir).unwrap_or_default();
     let mut index = Index::new();
     let mut graph = ReferenceGraph::new();
     let mut all_files: HashSet<String> = HashSet::new();
@@ -119,10 +121,60 @@ fn build_index_and_graph(
 
         all_files.insert(rel.clone());
 
+        // Check if we can reuse the cached entry (mtime + size match).
+        let meta = fs::metadata(abs).ok();
+        let cur_mtime = meta.as_ref().and_then(|m| {
+            m.modified().ok().and_then(|t| {
+                t.duration_since(std::time::UNIX_EPOCH)
+                    .ok()
+                    .map(|d| d.as_secs() as i64)
+            })
+        });
+        let cur_size = meta.as_ref().map(|m| m.len());
+
+        if let Some(cached) = prev_index.get(&rel) {
+            if cached.mtime_secs.is_some()
+                && cached.mtime_secs == cur_mtime
+                && cached.file_size == cur_size
+            {
+                // Reuse cached data — reconstruct graph node if it had a header.
+                if cached.has_header {
+                    if let Some(header) = &cached.header {
+                        graph.add_node(GraphNode {
+                            file: rel.clone(),
+                            related: header.related.clone(),
+                            see: header.see.clone(),
+                        });
+                    }
+                }
+                if !cached.tag_names.is_empty() {
+                    graph.register_tag_names(
+                        &rel,
+                        cached.tag_names.iter().cloned().collect(),
+                    );
+                }
+                index.upsert(cached.clone());
+                continue;
+            }
+        }
+
         let content = match fs::read_to_string(abs) {
             Ok(c) => c,
             Err(_) => continue, // binary or unreadable
         };
+
+        // Parse all tags to collect named tag names for fragment validation.
+        let all_tags = parser::parse_all_agents_tags(&content, abs);
+        let mut tag_name_set: HashSet<String> = HashSet::new();
+        for tag in &all_tags {
+            if let Some(name) = &tag.name {
+                tag_name_set.insert(name.clone());
+            }
+        }
+        let tag_names_vec: Vec<String> = tag_name_set.iter().cloned().collect();
+        if !tag_name_set.is_empty() {
+            graph.register_tag_names(&rel, tag_name_set);
+        }
 
         if let Some(block) = parser::parse_agents_block(&content, abs) {
             graph.add_node(GraphNode {
@@ -135,12 +187,18 @@ fn build_index_and_graph(
                 path: rel,
                 has_header: true,
                 header: Some(cached),
+                mtime_secs: cur_mtime,
+                file_size: cur_size,
+                tag_names: tag_names_vec,
             });
         } else {
             index.upsert(CachedFile {
                 path: rel,
                 has_header: false,
                 header: None,
+                mtime_secs: cur_mtime,
+                file_size: cur_size,
+                tag_names: tag_names_vec,
             });
         }
     }
@@ -167,14 +225,14 @@ fn cmd_status(
     config: &Config,
     _repo: &GitRepo,
 ) -> Result<()> {
-    let (index, graph, all_files) = build_index_and_graph(workdir, config)?;
+    let (index, graph, all_files) = build_index_and_graph(workdir, git_dir, config)?;
 
     let total = all_files.len();
     let with_headers = index.files_with_headers().len();
     let missing = index.files_missing_headers().len();
     let broken = graph.broken_refs(&all_files);
 
-    println!("{}", "git-agent-headers status".bold());
+    println!("{}", "git-agent-tags status".bold());
     println!("  Files scanned:       {}", total);
     println!("  With @agents header: {}", with_headers.to_string().green());
     println!("  Missing header:      {}", missing.to_string().yellow());
@@ -205,7 +263,7 @@ fn cmd_check(
     repo: &GitRepo,
     deep: bool,
 ) -> Result<()> {
-    let (index, graph, all_files) = build_index_and_graph(workdir, config)?;
+    let (index, graph, all_files) = build_index_and_graph(workdir, git_dir, config)?;
     cache::save_index(git_dir, &index)?;
 
     let mut all_warnings: Vec<Warning> = Vec::new();
@@ -259,7 +317,7 @@ fn cmd_check(
 }
 
 fn cmd_broken(workdir: &Path, git_dir: &Path, config: &Config) -> Result<()> {
-    let (index, graph, all_files) = build_index_and_graph(workdir, config)?;
+    let (index, graph, all_files) = build_index_and_graph(workdir, git_dir, config)?;
     cache::save_index(git_dir, &index)?;
 
     let broken = graph.broken_refs(&all_files);
@@ -280,7 +338,7 @@ fn cmd_broken(workdir: &Path, git_dir: &Path, config: &Config) -> Result<()> {
 }
 
 fn cmd_missing(workdir: &Path, git_dir: &Path, config: &Config) -> Result<()> {
-    let (index, _graph, _all_files) = build_index_and_graph(workdir, config)?;
+    let (index, _graph, _all_files) = build_index_and_graph(workdir, git_dir, config)?;
     cache::save_index(git_dir, &index)?;
 
     let missing = index.files_missing_headers();
@@ -301,7 +359,7 @@ fn cmd_suggest(
     config: &Config,
     repo: &GitRepo,
 ) -> Result<()> {
-    let (index, graph, _all_files) = build_index_and_graph(workdir, config)?;
+    let (index, graph, _all_files) = build_index_and_graph(workdir, git_dir, config)?;
     cache::save_index(git_dir, &index)?;
 
     let suggestions = check::cochange_suggestions(
@@ -324,7 +382,7 @@ fn cmd_suggest(
 }
 
 fn cmd_graph(workdir: &Path, git_dir: &Path, config: &Config, file: &str) -> Result<()> {
-    let (index, graph, _all_files) = build_index_and_graph(workdir, config)?;
+    let (index, graph, _all_files) = build_index_and_graph(workdir, git_dir, config)?;
     cache::save_index(git_dir, &index)?;
 
     let node = graph.get_node(file);
@@ -366,7 +424,7 @@ fn cmd_graph(workdir: &Path, git_dir: &Path, config: &Config, file: &str) -> Res
 
 fn cmd_reindex(workdir: &Path, git_dir: &Path, config: &Config) -> Result<()> {
     println!("Reindexing...");
-    let (index, _graph, _all_files) = build_index_and_graph(workdir, config)?;
+    let (index, _graph, _all_files) = build_index_and_graph(workdir, git_dir, config)?;
     cache::save_index(git_dir, &index)?;
     let with = index.files_with_headers().len();
     let without = index.files_missing_headers().len();
@@ -379,7 +437,7 @@ fn cmd_reindex(workdir: &Path, git_dir: &Path, config: &Config) -> Result<()> {
     Ok(())
 }
 
-fn cmd_build(workdir: &Path, config: &Config) -> Result<()> {
+fn cmd_build(workdir: &Path, _git_dir: &Path, config: &Config) -> Result<()> {
     let mut all_tags: Vec<AgentsTag> = Vec::new();
 
     for entry in WalkDir::new(workdir)
@@ -425,14 +483,15 @@ fn cmd_build(workdir: &Path, config: &Config) -> Result<()> {
 /// Render all tags into the .agent-context Markdown format.
 pub fn render_agent_context(tags: &[AgentsTag]) -> String {
     let mut out = String::from(
-        "# agent-context\n<!-- Generated by git-agent-headers. Do not edit manually. -->",
+        "# agent-context\n<!-- Generated by git-agent-tags. Do not edit manually. -->",
     );
 
     for tag in tags {
         out.push_str("\n\n");
+        let name_suffix = tag.name.as_deref().map_or(String::new(), |n| format!("#{}", n));
         let heading = match tag.kind {
-            TagKind::FileHeader => format!("## {}", tag.file),
-            TagKind::Inline => format!("## {}:{}", tag.file, tag.line),
+            TagKind::FileHeader => format!("## {}{}", tag.file, name_suffix),
+            TagKind::Inline => format!("## {}:{}{}", tag.file, tag.line, name_suffix),
         };
         out.push_str(&heading);
         let body = tag.text.join("\n");
@@ -454,6 +513,17 @@ mod tests {
     fn make_tag(file: &str, line: usize, text: &[&str], kind: TagKind) -> AgentsTag {
         AgentsTag {
             file: file.to_string(),
+            name: None,
+            line,
+            text: text.iter().map(|s| s.to_string()).collect(),
+            kind,
+        }
+    }
+
+    fn make_named_tag(file: &str, name: &str, line: usize, text: &[&str], kind: TagKind) -> AgentsTag {
+        AgentsTag {
+            file: file.to_string(),
+            name: Some(name.to_string()),
             line,
             text: text.iter().map(|s| s.to_string()).collect(),
             kind,
@@ -510,5 +580,19 @@ mod tests {
         )];
         let out = render_agent_context(&tags);
         assert!(out.contains("Line one.\nLine two."));
+    }
+
+    #[test]
+    fn test_render_named_file_header() {
+        let tags = vec![make_named_tag("src/auth.ts", "auth-module", 1, &["Auth module."], TagKind::FileHeader)];
+        let out = render_agent_context(&tags);
+        assert!(out.contains("## src/auth.ts#auth-module\n"));
+    }
+
+    #[test]
+    fn test_render_named_inline() {
+        let tags = vec![make_named_tag("src/auth.ts", "token-check", 42, &["Check tokens."], TagKind::Inline)];
+        let out = render_agent_context(&tags);
+        assert!(out.contains("## src/auth.ts:42#token-check\n"));
     }
 }

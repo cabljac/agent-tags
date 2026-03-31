@@ -2,7 +2,7 @@
  * @agents
  * Warning/detection logic combining parser, graph, and git heuristics.
  * Produces tiered output: broken refs, stale headers, suggestions.
- * Related: git-agent-headers/src/parser.rs, git-agent-headers/src/graph.rs, git-agent-headers/src/git.rs, git-agent-headers/src/cache.rs
+ * Related: git-agent-tags/src/parser.rs, git-agent-tags/src/graph.rs, git-agent-tags/src/git.rs, git-agent-tags/src/cache.rs
  */
 
 use std::collections::{HashMap, HashSet};
@@ -69,12 +69,17 @@ pub fn check_git_staleness(
 
     let pct = repo.diff_percent_since(&header_sha, file)?;
     if pct > stale_diff_percent {
+        let pct_display = if pct > 100.0 {
+            "100%+".to_string()
+        } else {
+            format!("{:.0}%", pct)
+        };
         warnings.push(Warning {
             file: file.to_string(),
             level: WarnLevel::Stale,
             message: format!(
-                "{:.0}% of file changed since header last updated (threshold: {:.0}%)",
-                pct, stale_diff_percent
+                "{} of file changed since header last updated (threshold: {:.0}%)",
+                pct_display, stale_diff_percent
             ),
         });
     }
