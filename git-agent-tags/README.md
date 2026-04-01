@@ -42,6 +42,13 @@ git agent-tags graph src/auth/token.ts
 
 # Rebuild the file index cache
 git agent-tags reindex
+
+# Run as a pre-commit hook (fail on broken refs, warn on staleness)
+git agent-tags hook
+git agent-tags hook --deep   # also runs regex heuristics
+
+# Install the pre-commit hook into .git/hooks
+git agent-tags hook --install
 ```
 
 ## The context command
@@ -84,12 +91,32 @@ git agent-tags context --for src/auth/token.ts --hops 2
 git agent-tags context --for src/auth/token.ts --hops 0
 ```
 
+## Pre-commit hook
+
+`git agent-tags hook --install` adds a pre-commit hook to `.git/hooks/`. On each commit:
+
+- **Broken references** (renamed/deleted files, invalid fragments) → **block the commit** (exit 1)
+- **Stale headers** → **print warnings** but allow the commit (exit 0)
+
+If a pre-commit hook already exists, the agent-tags check is appended to it. If `git-agent-tags` isn't installed, the hook silently skips.
+
 ## Staleness detection
 
 Two tiers, run in order of cost:
 
 1. **Git heuristics** — compare the last commit that touched the `@agents` block (via `git blame`) against the last commit that touched the file. If the gap is large or more than 40% of lines changed, the header is flagged stale.
 2. **Regex heuristics** (`--deep`) — scan the diff since the header was last updated for new exports or imports not mentioned in `Related:`.
+
+### Scoped staleness with `lines_owned`
+
+Tags can declare how many lines of code they own:
+
+```ts
+// @agents(token-check, 15): Must validate before refresh.
+const isValid = checkToken(token);  // ← line 1 of 15
+```
+
+When `lines_owned` is set, staleness is checked only against the owned range (the N lines after the comment ends) rather than the whole file. This avoids false positives when unrelated parts of a large file change.
 
 ## Configuration
 

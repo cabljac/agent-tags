@@ -67,6 +67,20 @@ A tag name must:
 
 Names are case-sensitive. `token-check` and `Token-Check` are different names.
 
+### Lines owned
+
+A named tag can declare how many lines of code it owns:
+
+```ts
+// @agents(token-check, 15): Must validate before refresh.
+// This is critical for security.
+const isValid = checkToken(token);  // ← line 1 of 15
+```
+
+The syntax is `@agents(name, N)` where `N` is the number of code lines owned **after the comment ends** (continuation lines are not counted). This scopes staleness detection to the owned range rather than the whole file — if those specific lines change without the tag being updated, it is flagged as stale.
+
+Lines owned is optional. When omitted, staleness is checked against the entire file.
+
 ## Fields
 
 File header bodies support the following structured fields. All are optional.
@@ -129,9 +143,9 @@ For languages not listed, `#` style is assumed.
 
 ## Parsing rules
 
-1. **File headers**: scan the first 30 lines for the marker `@agents` or `@agents(name)` inside a comment. If found, the entire enclosing comment block is the header.
+1. **File headers**: scan the first 30 lines for the marker `@agents`, `@agents(name)`, or `@agents(name, N)` inside a comment. If found, the entire enclosing comment block is the header.
 
-2. **Inline tags**: scan the entire file for `@agents:` or `@agents(name):` inside comments. Lines within the file header range are excluded from inline scanning.
+2. **Inline tags**: scan the entire file for `@agents:`, `@agents(name):`, or `@agents(name, N):` inside comments. Lines within the file header range are excluded from inline scanning.
 
 3. **Comment stripping**: the parser strips comment prefixes (`//`, `#`, `--`, `*`) to extract the inner text. No language-specific AST parsing is performed.
 

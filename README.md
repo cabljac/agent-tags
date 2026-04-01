@@ -23,12 +23,19 @@ No AST parsing. Works in any language.
 const isValid = checkToken(token);
 ```
 
+**Named inline tag with lines owned**:
+```ts
+// @agents(token-check, 15): Must validate before refresh.
+// This is critical for security.
+const isValid = checkToken(token);  // ← line 1 of 15
+```
+
 **Unnamed inline tag**:
 ```python
 # @agents: Must run BEFORE the mutation callback, not after.
 ```
 
-Named tags are stable anchors — other files reference them with `file.ts#tag-name` in `Related:`, and the reference is validated.
+Named tags are stable anchors — other files reference them with `file.ts#tag-name` in `Related:`, and the reference is validated. The optional second parameter (`lines_owned`) scopes staleness detection to a specific range of code after the comment.
 
 ## Specification
 
@@ -49,6 +56,9 @@ git agent-tags context --for src/auth/token.ts
 
 # Check for stale headers and broken references
 git agent-tags check
+
+# Pre-commit hook: block on broken refs, warn on staleness
+git agent-tags hook --install
 ```
 
 See [git-agent-tags/README.md](git-agent-tags/README.md) for install instructions and full command reference.
