@@ -63,6 +63,15 @@ enum Command {
     Reindex,
     /// Print all @agents tags across the repo to stdout
     Context,
+    /// Run as a pre-commit hook: fail on broken refs, warn on staleness
+    Hook {
+        /// Also run regex-based heuristics
+        #[arg(long)]
+        deep: bool,
+        /// Install the pre-commit hook into .git/hooks
+        #[arg(long)]
+        install: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -85,6 +94,13 @@ fn main() -> Result<()> {
         Command::Graph { file } => cmd_graph(&workdir, &git_dir, &config, &file),
         Command::Reindex => cmd_reindex(&workdir, &git_dir, &config),
         Command::Context => cmd_build(&workdir, &git_dir, &config),
+        Command::Hook { deep, install } => {
+            if install {
+                cmd_hook_install(&git_dir)
+            } else {
+                cmd_hook(&workdir, &git_dir, &config, &repo, deep)
+            }
+        }
     }
 }
 
@@ -288,6 +304,7 @@ fn cmd_check(
                 &cached.path,
                 header.start_line,
                 header.end_line,
+                header.lines_owned,
                 repo,
                 config.stale_commit_gap,
                 config.stale_diff_percent,
@@ -505,6 +522,138 @@ pub fn render_agent_context(tags: &[AgentsTag]) -> String {
     out
 }
 
+fn cmd_hook(
+    workdir: &Path,
+    git_dir: &Path,
+    config: &Config,
+    repo: &GitRepo,
+    deep: bool,
+) -> Result<()> {
+    let (index, graph, all_files) = build_index_and_graph(workdir, git_dir, config)?;
+    cache::save_index(git_dir, &index)?;
+
+    let mut errors: Vec<Warning> = Vec::new();
+    let mut warnings: Vec<Warning> = Vec::new();
+
+    // Broken refs are errors (block commit)
+    for (src, dep) in graph.broken_refs(&all_files) {
+        errors.push(Warning {
+            file: src,
+            level: WarnLevel::Broken,
+            message: format!("Related: {} (file not found)", dep),
+        });
+    }
+
+    let rename_warnings = check::check_renames(&graph, repo)?;
+    for w in rename_warnings {
+        match w.level {
+            WarnLevel::Broken => errors.push(w),
+            _ => warnings.push(w),
+        }
+    }
+
+    // Staleness checks are warnings (print but don't block)
+    for cached in index.files_with_headers() {
+        if let Some(header) = &cached.header {
+            let stale = check::check_git_staleness(
+                &cached.path,
+                header.start_line,
+                header.end_line,
+                header.lines_owned,
+                repo,
+                config.stale_commit_gap,
+                config.stale_diff_percent,
+            )?;
+            warnings.extend(stale);
+
+            if deep {
+                if let Some(sha) = &header.last_header_commit {
+                    let w =
+                        check::check_regex_staleness(&cached.path, sha, &header.related, repo)?;
+                    warnings.extend(w);
+                }
+            }
+        }
+    }
+
+    if !errors.is_empty() {
+        println!(
+            "\n{} {} error(s) — commit blocked:\n",
+            "✗".red().bold(),
+            errors.len()
+        );
+        for w in &errors {
+            print_warning(w);
+        }
+    }
+
+    if !warnings.is_empty() {
+        println!(
+            "\n{} {} warning(s):\n",
+            "⚠".yellow().bold(),
+            warnings.len()
+        );
+        for w in &warnings {
+            print_warning(w);
+        }
+    }
+
+    if errors.is_empty() && warnings.is_empty() {
+        println!("{}", "✓ agent-tags: no issues.".green());
+    }
+
+    if !errors.is_empty() {
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+fn cmd_hook_install(git_dir: &Path) -> Result<()> {
+    let hooks_dir = git_dir.join("hooks");
+    fs::create_dir_all(&hooks_dir)?;
+
+    let hook_path = hooks_dir.join("pre-commit");
+    let hook_script = r#"#!/bin/sh
+# git-agent-tags pre-commit hook
+# Fails on broken references, warns on stale headers.
+
+if command -v git-agent-tags >/dev/null 2>&1; then
+    git-agent-tags hook
+else
+    echo "warning: git-agent-tags not installed, skipping check"
+fi
+"#;
+
+    if hook_path.exists() {
+        let existing = fs::read_to_string(&hook_path)?;
+        if existing.contains("git-agent-tags") {
+            println!("{} pre-commit hook already installed.", "✓".green());
+            return Ok(());
+        }
+        // Append to existing hook
+        let mut content = existing;
+        if !content.ends_with('\n') {
+            content.push('\n');
+        }
+        content.push_str("\n# git-agent-tags pre-commit hook\nif command -v git-agent-tags >/dev/null 2>&1; then\n    git-agent-tags hook\nfi\n");
+        fs::write(&hook_path, content)?;
+        println!(
+            "{} Appended agent-tags check to existing pre-commit hook.",
+            "✓".green()
+        );
+    } else {
+        fs::write(&hook_path, hook_script)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&hook_path, fs::Permissions::from_mode(0o755))?;
+        }
+        println!("{} Installed pre-commit hook.", "✓".green());
+    }
+
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {
@@ -514,6 +663,7 @@ mod tests {
         AgentsTag {
             file: file.to_string(),
             name: None,
+            lines_owned: None,
             line,
             text: text.iter().map(|s| s.to_string()).collect(),
             kind,
@@ -524,6 +674,7 @@ mod tests {
         AgentsTag {
             file: file.to_string(),
             name: Some(name.to_string()),
+            lines_owned: None,
             line,
             text: text.iter().map(|s| s.to_string()).collect(),
             kind,
