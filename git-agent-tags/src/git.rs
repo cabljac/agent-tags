@@ -242,6 +242,10 @@ impl GitRepo {
 
         let mut out = Vec::new();
         diff.print(git2::DiffFormat::Patch, |_, _, line| {
+            let origin = line.origin();
+            if origin == '+' || origin == '-' || origin == ' ' {
+                out.push(origin as u8);
+            }
             out.extend_from_slice(line.content());
             true
         })?;

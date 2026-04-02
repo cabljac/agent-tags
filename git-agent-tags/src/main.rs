@@ -108,6 +108,19 @@ fn main() -> Result<()> {
 // Shared helpers
 // ---------------------------------------------------------------------------
 
+fn populate_header_commits(index: &mut Index, repo: &GitRepo) {
+    for cached in index.files_with_headers_mut() {
+        if let Some(header) = &mut cached.header {
+            if header.last_header_commit.is_none() {
+                header.last_header_commit = repo
+                    .last_commit_for_lines(&cached.path, header.start_line, header.end_line)
+                    .ok()
+                    .flatten();
+            }
+        }
+    }
+}
+
 fn build_index_and_graph(
     workdir: &Path,
     git_dir: &Path,
@@ -279,7 +292,12 @@ fn cmd_check(
     repo: &GitRepo,
     deep: bool,
 ) -> Result<()> {
-    let (index, graph, all_files) = build_index_and_graph(workdir, git_dir, config)?;
+    let (mut index, graph, all_files) = build_index_and_graph(workdir, git_dir, config)?;
+
+    if deep {
+        populate_header_commits(&mut index, repo);
+    }
+
     cache::save_index(git_dir, &index)?;
 
     let mut all_warnings: Vec<Warning> = Vec::new();
@@ -529,7 +547,12 @@ fn cmd_hook(
     repo: &GitRepo,
     deep: bool,
 ) -> Result<()> {
-    let (index, graph, all_files) = build_index_and_graph(workdir, git_dir, config)?;
+    let (mut index, graph, all_files) = build_index_and_graph(workdir, git_dir, config)?;
+
+    if deep {
+        populate_header_commits(&mut index, repo);
+    }
+
     cache::save_index(git_dir, &index)?;
 
     let mut errors: Vec<Warning> = Vec::new();
@@ -745,5 +768,113 @@ mod tests {
         let tags = vec![make_named_tag("src/auth.ts", "token-check", 42, &["Check tokens."], TagKind::Inline)];
         let out = render_agent_context(&tags);
         assert!(out.contains("## src/auth.ts:42#token-check\n"));
+    }
+
+    #[test]
+    fn test_populate_header_commits_sets_sha() {
+        use std::process::Command;
+
+        // Create a temp git repo with a file containing an @agents header
+        let tmp = std::env::temp_dir().join(format!("agent-tags-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        Command::new("git").args(["init"]).current_dir(&tmp).output().unwrap();
+        Command::new("git").args(["config", "user.email", "test@test.com"]).current_dir(&tmp).output().unwrap();
+        Command::new("git").args(["config", "user.name", "Test"]).current_dir(&tmp).output().unwrap();
+
+        // Write a file with an @agents header
+        let file_content = "// @agents\n// Test file for staleness.\n// Related: other.ts\n\nfn main() {}\n";
+        std::fs::write(tmp.join("test.rs"), file_content).unwrap();
+
+        Command::new("git").args(["add", "."]).current_dir(&tmp).output().unwrap();
+        Command::new("git").args(["commit", "-m", "initial"]).current_dir(&tmp).output().unwrap();
+
+        // Build an index with the file
+        let block = parser::parse_agents_block(file_content, std::path::Path::new("test.rs")).unwrap();
+        let cached_header = cache::cached_header_from_block(&block);
+        assert!(cached_header.last_header_commit.is_none(), "starts as None");
+
+        let mut index = Index::new();
+        index.upsert(CachedFile {
+            path: "test.rs".to_string(),
+            has_header: true,
+            header: Some(cached_header),
+            mtime_secs: None,
+            file_size: None,
+            tag_names: vec![],
+        });
+
+        // Open repo and populate
+        let repo = GitRepo::open(&tmp).unwrap();
+        populate_header_commits(&mut index, &repo);
+
+        let header = index.get("test.rs").unwrap().header.as_ref().unwrap();
+        assert!(
+            header.last_header_commit.is_some(),
+            "last_header_commit should be Some after populate_header_commits, got None"
+        );
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_deep_check_detects_new_export() {
+        use std::process::Command;
+
+        let tmp = std::env::temp_dir().join(format!("agent-tags-deep-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        Command::new("git").args(["init"]).current_dir(&tmp).output().unwrap();
+        Command::new("git").args(["config", "user.email", "test@test.com"]).current_dir(&tmp).output().unwrap();
+        Command::new("git").args(["config", "user.name", "Test"]).current_dir(&tmp).output().unwrap();
+
+        // Commit 1: file with header
+        let v1 = "// @agents\n// Auth module.\n\npub fn login() {}\n";
+        std::fs::write(tmp.join("auth.rs"), v1).unwrap();
+        Command::new("git").args(["add", "."]).current_dir(&tmp).output().unwrap();
+        Command::new("git").args(["commit", "-m", "initial"]).current_dir(&tmp).output().unwrap();
+
+        // Commit 2: add a new pub fn without updating the header
+        let v2 = "// @agents\n// Auth module.\n\npub fn login() {}\n\npub fn logout() {}\n";
+        std::fs::write(tmp.join("auth.rs"), v2).unwrap();
+        Command::new("git").args(["add", "."]).current_dir(&tmp).output().unwrap();
+        Command::new("git").args(["commit", "-m", "add logout"]).current_dir(&tmp).output().unwrap();
+
+        // Parse and build index
+        let block = parser::parse_agents_block(v2, std::path::Path::new("auth.rs")).unwrap();
+        let cached_header = cache::cached_header_from_block(&block);
+        let mut index = Index::new();
+        index.upsert(CachedFile {
+            path: "auth.rs".to_string(),
+            has_header: true,
+            header: Some(cached_header),
+            mtime_secs: None,
+            file_size: None,
+            tag_names: vec![],
+        });
+
+        // Populate header commits
+        let repo = GitRepo::open(&tmp).unwrap();
+        populate_header_commits(&mut index, &repo);
+
+        let header = index.get("auth.rs").unwrap().header.as_ref().unwrap();
+        let sha = header.last_header_commit.as_ref().expect("should have SHA");
+
+        // Now check_regex_staleness should detect the new pub fn
+        let warnings = check::check_regex_staleness("auth.rs", sha, &header.related, &repo).unwrap();
+        assert!(
+            !warnings.is_empty(),
+            "should detect new pub fn export, got no warnings"
+        );
+        assert!(
+            warnings[0].message.contains("new exports"),
+            "warning should mention new exports, got: {}",
+            warnings[0].message
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

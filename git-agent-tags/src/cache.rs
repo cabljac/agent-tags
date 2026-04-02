@@ -74,6 +74,10 @@ impl Index {
         self.files.values().filter(|f| f.has_header).collect()
     }
 
+    pub fn files_with_headers_mut(&mut self) -> Vec<&mut CachedFile> {
+        self.files.values_mut().filter(|f| f.has_header).collect()
+    }
+
     pub fn files_missing_headers(&self) -> Vec<&CachedFile> {
         self.files.values().filter(|f| !f.has_header).collect()
     }

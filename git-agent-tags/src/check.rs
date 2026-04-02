@@ -231,6 +231,80 @@ pub fn cochange_suggestions(
     Ok(warnings)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_export_regex_matches_pub_fn() {
+        let re = export_re();
+        assert!(re.is_match("+pub fn summarize_tags(path: &Path) -> String {"));
+    }
+
+    #[test]
+    fn test_export_regex_matches_pub_struct() {
+        let re = export_re();
+        assert!(re.is_match("+pub struct Foo {"));
+    }
+
+    #[test]
+    fn test_export_regex_matches_export_function() {
+        let re = export_re();
+        assert!(re.is_match("+export function handleAuth() {"));
+    }
+
+    #[test]
+    fn test_export_regex_matches_export_const() {
+        let re = export_re();
+        assert!(re.is_match("+export const API_KEY = 'abc';"));
+    }
+
+    #[test]
+    fn test_export_regex_matches_python_def() {
+        let re = export_re();
+        assert!(re.is_match("+def process_data(x):"));
+    }
+
+    #[test]
+    fn test_export_regex_matches_go_func() {
+        let re = export_re();
+        assert!(re.is_match("+func HandleRequest(w http.ResponseWriter) {"));
+    }
+
+    #[test]
+    fn test_export_regex_ignores_non_export() {
+        let re = export_re();
+        assert!(!re.is_match("+let x = 5;"));
+        assert!(!re.is_match("+const y = 10;"));
+        assert!(!re.is_match(" pub fn existing_unchanged() {"));
+    }
+
+    #[test]
+    fn test_export_regex_requires_plus_prefix() {
+        let re = export_re();
+        assert!(!re.is_match("pub fn not_a_diff_line() {"));
+        assert!(!re.is_match("-pub fn removed_line() {"));
+    }
+
+    #[test]
+    fn test_import_regex_matches_es_import() {
+        let re = import_re();
+        let caps = re.captures("+import { foo } from './utils';");
+        assert!(caps.is_some());
+        let caps = caps.unwrap();
+        assert_eq!(caps.get(2).unwrap().as_str(), "./utils");
+    }
+
+    #[test]
+    fn test_import_regex_matches_require() {
+        let re = import_re();
+        let caps = re.captures("+const x = require('./helpers');");
+        assert!(caps.is_some());
+        let caps = caps.unwrap();
+        assert_eq!(caps.get(3).unwrap().as_str(), "./helpers");
+    }
+}
+
 /// Check for broken references using rename detection.
 pub fn check_renames(graph: &ReferenceGraph, repo: &GitRepo) -> Result<Vec<Warning>> {
     let mut warnings = Vec::new();
