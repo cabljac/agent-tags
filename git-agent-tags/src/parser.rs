@@ -444,17 +444,15 @@ fn parse_line_comment(lines: &[&str], limit: usize, style: CommentStyle) -> Opti
 
             while j < lines.len() {
                 let bl = lines[j].trim();
-                if !bl.starts_with(prefix) && !bl.is_empty() {
+                if !bl.starts_with(prefix) {
                     break;
                 }
-                if bl.starts_with(prefix) {
-                    if j < limit && found_marker.is_none() {
-                        if let Some(m) = is_block_marker(bl, prefix) {
-                            found_marker = Some(m);
-                        }
+                if j < limit && found_marker.is_none() {
+                    if let Some(m) = is_block_marker(bl, prefix) {
+                        found_marker = Some(m);
                     }
-                    block_lines.push(bl.to_string());
                 }
+                block_lines.push(bl.to_string());
                 j += 1;
             }
 
