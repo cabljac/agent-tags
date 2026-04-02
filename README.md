@@ -62,3 +62,7 @@ git agent-tags hook --install
 ```
 
 See [git-agent-tags/README.md](git-agent-tags/README.md) for install instructions and full command reference.
+
+## Dogfooding
+
+This repo uses `@agents` tags on its own source files and runs the pre-commit hook (`git agent-tags hook --install`) to block commits with broken references. It also ships an [Agent Skill](.agents/skills/agent-tags/) so compatible agents (Claude Code, Cursor, Copilot, etc.) can read, write, and maintain tags automatically.
