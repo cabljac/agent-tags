@@ -92,14 +92,18 @@ const isValid = checkToken(token);
 
 Continuation: subsequent contiguous comment lines are part of the same tag. A blank line or code ends it.
 
-### Lines owned
+### Range markers
 
-Scopes staleness detection to N lines after the comment:
+Use `start` and `end` to define a scoped region:
 
 ```ts
-// @agents(token-check, 15): Must validate before refresh.
-const isValid = checkToken(token);  // line 1 of 15
+// @agents(auth-middleware, start): Validates JWT tokens.
+// Related: src/models/user.js#user-model
+function validateToken(req, res, next) { /* ... */ }
+// @agents(auth-middleware, end)
 ```
+
+Staleness is scoped to code between the markers. Every `start` must have a matching `end`.
 
 ### Fields (file headers only)
 

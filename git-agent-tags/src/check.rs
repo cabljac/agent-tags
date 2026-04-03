@@ -33,13 +33,10 @@ pub struct Warning {
 }
 
 /// Tier 1: Git heuristics (staleness via commit gap + diff percent).
-/// When `lines_owned` is set, staleness is scoped to the owned line range
-/// (starting after `header_end`) rather than the whole file.
 pub fn check_git_staleness(
     file: &str,
     header_start: usize,
     header_end: usize,
-    lines_owned: Option<usize>,
     repo: &GitRepo,
     stale_commit_gap: usize,
     stale_diff_percent: f64,
@@ -51,26 +48,7 @@ pub fn check_git_staleness(
         None => return Ok(warnings),
     };
 
-    // When lines_owned is set, only check the owned range — skip whole-file heuristics.
-    if let Some(owned) = lines_owned {
-        let owned_start = header_end + 1;
-        let owned_end = header_end + owned;
-        if let Some(owned_sha) = repo.last_commit_for_lines(file, owned_start, owned_end)? {
-            if owned_sha != header_sha {
-                warnings.push(Warning {
-                    file: file.to_string(),
-                    level: WarnLevel::Stale,
-                    message: format!(
-                        "owned lines {}-{} changed since tag last updated",
-                        owned_start, owned_end
-                    ),
-                });
-            }
-        }
-        return Ok(warnings);
-    }
-
-    // Whole-file heuristics (no lines_owned).
+    // Whole-file heuristics.
     let (last_file_commit, gap) = repo.file_staleness_counts(file, &header_sha)?;
 
     // No changes since the header commit.

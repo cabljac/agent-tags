@@ -107,16 +107,17 @@ Two tiers, run in order of cost:
 1. **Git heuristics** — compare the last commit that touched the `@agents` block (via `git blame`) against the last commit that touched the file. If the gap is large or more than 40% of lines changed, the header is flagged stale.
 2. **Regex heuristics** (`--deep`) — scan the diff since the header was last updated for new exports or imports not mentioned in `Related:`.
 
-### Scoped staleness with `lines_owned`
+### Scoped staleness with range markers
 
-Tags can declare how many lines of code they own:
+Tags can use `start`/`end` markers to define a region:
 
 ```ts
-// @agents(token-check, 15): Must validate before refresh.
-const isValid = checkToken(token);  // ← line 1 of 15
+// @agents(auth-middleware, start): Validates JWT tokens.
+function validateToken(req, res, next) { /* ... */ }
+// @agents(auth-middleware, end)
 ```
 
-When `lines_owned` is set, staleness is checked only against the owned range (the N lines after the comment ends) rather than the whole file. This avoids false positives when unrelated parts of a large file change.
+Staleness is scoped to the code between the markers. If code inside the region changes without the start marker being updated, it is flagged stale. The markers move with the code through rebases and merges.
 
 ## Configuration
 

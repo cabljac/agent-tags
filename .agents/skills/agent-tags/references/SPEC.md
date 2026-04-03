@@ -67,19 +67,30 @@ A tag name must:
 
 Names are case-sensitive. `token-check` and `Token-Check` are different names.
 
-### Lines owned
+### Range markers
 
-A named tag can declare how many lines of code it owns:
+A named inline tag can use `start` and `end` markers to define a region of code:
 
 ```ts
-// @agents(token-check, 15): Must validate before refresh.
-// This is critical for security.
-const isValid = checkToken(token);  // ← line 1 of 15
+// @agents(auth-middleware, start): Validates JWT tokens, attaches user context.
+// Related: src/models/user.js#user-model
+// Don't cache tokens. Must run before any route handler.
+function validateToken(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return next(new AuthError('No token provided'));
+  try {
+    req.user = jwt.verify(token, process.env.JWT_SECRET);
+    next();
+  } catch (err) { next(new AuthError('Invalid token')); }
+}
+// @agents(auth-middleware, end)
 ```
 
-The syntax is `@agents(name, N)` where `N` is the number of code lines owned **after the comment ends** (continuation lines are not counted). This scopes staleness detection to the owned range rather than the whole file — if those specific lines change without the tag being updated, it is flagged as stale.
+The `start` marker opens a named region. It uses inline tag syntax (`@agents(name, start):` with a colon) and may include body text, `Related:`, and warnings. The `end` marker closes the region (`@agents(name, end)` — no colon, no body).
 
-Lines owned is optional. When omitted, staleness is checked against the entire file.
+Staleness detection is scoped to the code between the markers. If the code inside the region changes without the start marker being updated, it is flagged as stale. The markers move with the code through rebases, cherry-picks, and merges.
+
+Every `start` must have a matching `end` with the same name in the same file. Unpaired markers are validation errors. Range markers are for inline tags only — file headers do not use them.
 
 ## Fields
 
@@ -143,9 +154,9 @@ For languages not listed, `#` style is assumed.
 
 ## Parsing rules
 
-1. **File headers**: scan the first 30 lines for the marker `@agents`, `@agents(name)`, or `@agents(name, N)` inside a comment. If found, the entire enclosing comment block is the header.
+1. **File headers**: scan the first 30 lines for the marker `@agents` or `@agents(name)` inside a comment. If found, the entire enclosing comment block is the header.
 
-2. **Inline tags**: scan the entire file for `@agents:`, `@agents(name):`, or `@agents(name, N):` inside comments. Lines within the file header range are excluded from inline scanning.
+2. **Inline tags**: scan the entire file for `@agents:`, `@agents(name):`, `@agents(name, start):`, or `@agents(name, end)` inside comments. Lines within the file header range are excluded from inline scanning.
 
 3. **Comment stripping**: the parser strips comment prefixes (`//`, `#`, `--`, `*`) to extract the inner text. No language-specific AST parsing is performed.
 

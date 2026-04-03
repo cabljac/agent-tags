@@ -34,9 +34,6 @@ pub struct CachedFile {
 pub struct CachedHeader {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    /// Number of lines of code owned by this tag (after the comment ends).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lines_owned: Option<usize>,
     pub body: Vec<String>,
     pub related: Vec<String>,
     pub see: Vec<String>,
@@ -116,7 +113,6 @@ pub fn save_index(git_dir: &Path, index: &Index) -> Result<()> {
 pub fn cached_header_from_block(block: &AgentsBlock) -> CachedHeader {
     CachedHeader {
         name: block.name.clone(),
-        lines_owned: block.lines_owned,
         body: block.body.clone(),
         related: block.related.clone(),
         see: block.see.clone(),

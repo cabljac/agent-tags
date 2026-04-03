@@ -23,11 +23,12 @@ No AST parsing. Works in any language.
 const isValid = checkToken(token);
 ```
 
-**Named inline tag with lines owned**:
+**Range markers** (scoped region):
 ```ts
-// @agents(token-check, 15): Must validate before refresh.
-// This is critical for security.
-const isValid = checkToken(token);  // ← line 1 of 15
+// @agents(auth-middleware, start): Validates JWT tokens.
+// Related: src/models/user.js#user-model
+function validateToken(req, res, next) { /* ... */ }
+// @agents(auth-middleware, end)
 ```
 
 **Unnamed inline tag**:
@@ -35,7 +36,7 @@ const isValid = checkToken(token);  // ← line 1 of 15
 # @agents: Must run BEFORE the mutation callback, not after.
 ```
 
-Named tags are stable anchors — other files reference them with `file.ts#tag-name` in `Related:`, and the reference is validated. The optional second parameter (`lines_owned`) scopes staleness detection to a specific range of code after the comment.
+Named tags are stable anchors — other files reference them with `file.ts#tag-name` in `Related:`, and the reference is validated. Range markers (`start`/`end`) scope staleness detection to the code between them — the markers move with the code through rebases and merges.
 
 ## Specification
 
