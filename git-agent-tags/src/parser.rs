@@ -7,14 +7,18 @@
 
 use std::path::Path;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RangeRole {
+    Start,
+    End,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct AgentsBlock {
     /// The raw header text (entire comment block)
     pub raw: String,
     /// Optional tag name from `@agents(name)`
     pub name: Option<String>,
-    /// Number of lines of code owned by this tag (after the comment ends)
-    pub lines_owned: Option<usize>,
     /// Free-form description lines
     pub body: Vec<String>,
     /// File paths from Related: lines
@@ -71,8 +75,8 @@ pub struct AgentsTag {
     pub file: String,
     /// Optional tag name from `@agents(name)` or `@agents(name):`.
     pub name: Option<String>,
-    /// Number of lines of code owned by this tag (after the comment ends).
-    pub lines_owned: Option<usize>,
+    /// Range role: Start or End for `@agents(name, start/end)` markers.
+    pub range_role: Option<RangeRole>,
     /// 1-indexed line number where this tag starts.
     pub line: usize,
     /// Annotation text lines. For FileHeader, reconstructed from the AgentsBlock fields.
@@ -130,7 +134,7 @@ pub fn parse_all_agents_tags(content: &str, file_path: &Path) -> Vec<AgentsTag> 
         // Strip the comment prefix to get the content.
         let content_opt = strip_comment_prefix(trimmed, prefix, style);
         if let Some(comment_content) = content_opt {
-            if let Some((inline_name, inline_lines_owned, rest)) = parse_inline_marker(comment_content) {
+            if let Some((inline_name, inline_range_role, rest)) = parse_inline_marker(comment_content) {
                 let first_text = rest.trim().to_string();
                 let tag_start = line_no;
                 let mut text = vec![first_text];
@@ -158,7 +162,7 @@ pub fn parse_all_agents_tags(content: &str, file_path: &Path) -> Vec<AgentsTag> 
                 tags.push(AgentsTag {
                     file: String::new(),
                     name: inline_name,
-                    lines_owned: inline_lines_owned,
+                    range_role: inline_range_role,
                     line: tag_start,
                     text,
                     kind: TagKind::Inline,
@@ -189,7 +193,7 @@ fn agents_block_to_tag(block: &AgentsBlock) -> AgentsTag {
     AgentsTag {
         file: String::new(),
         name: block.name.clone(),
-        lines_owned: block.lines_owned,
+        range_role: None,
         line: block.start_line,
         text,
         kind: TagKind::FileHeader,
@@ -233,9 +237,9 @@ fn strip_comment_prefix<'a>(
 }
 
 /// Check if a line contains the block-header marker `@agents` or `@agents(name)`.
-/// Returns `None` if no match, otherwise `Some((name, lines_owned))`.
+/// Returns `None` if no match, otherwise `Some((name, range_role))`.
 /// This distinguishes it from the inline form `@agents:` / `@agents(name):`.
-fn is_block_marker(line: &str, comment_prefix: &str) -> Option<(Option<String>, Option<usize>)> {
+fn is_block_marker(line: &str, comment_prefix: &str) -> Option<(Option<String>, Option<RangeRole>)> {
     let inner = if let Some(rest) = line.strip_prefix(comment_prefix) {
         rest.trim()
     } else if let Some(rest) = line.strip_prefix('*') {
@@ -253,23 +257,30 @@ fn is_block_marker(line: &str, comment_prefix: &str) -> Option<(Option<String>, 
     parse_agents_marker(inner)
 }
 
-/// Parse an `@agents`, `@agents(name)`, or `@agents(name, lines)` marker (without colon — file header form).
-/// Returns `None` if no match, otherwise `Some((name, lines_owned))`.
-fn parse_agents_marker(s: &str) -> Option<(Option<String>, Option<usize>)> {
+/// Parse an `@agents` or `@agents(name)` marker (without colon — file header form).
+/// Does not accept range markers (start/end) — those are inline only.
+/// Returns `None` if no match, otherwise `Some((name, None))`.
+fn parse_agents_marker(s: &str) -> Option<(Option<String>, Option<RangeRole>)> {
     if s == "@agents" {
         return Some((None, None));
     }
     if let Some(rest) = s.strip_prefix("@agents(") {
         if let Some(inner) = rest.strip_suffix(')') {
-            return parse_tag_params(inner);
+            // File headers only accept a bare name, no second parameter
+            if inner.contains(',') {
+                return None;
+            }
+            if !inner.is_empty() && is_valid_tag_name(inner) {
+                return Some((Some(inner.to_string()), None));
+            }
         }
     }
     None
 }
 
 /// Parse the contents inside `@agents(...)`.
-/// Accepts `name` or `name, N`. A name is always required.
-fn parse_tag_params(inner: &str) -> Option<(Option<String>, Option<usize>)> {
+/// Accepts `name`, `name, start`, or `name, end`. A name is always required.
+fn parse_tag_params(inner: &str) -> Option<(Option<String>, Option<RangeRole>)> {
     let parts: Vec<&str> = inner.splitn(2, ',').map(|s| s.trim()).collect();
     match parts.len() {
         1 => {
@@ -285,15 +296,16 @@ fn parse_tag_params(inner: &str) -> Option<(Option<String>, Option<usize>)> {
         }
         2 => {
             let name = parts[0];
-            let lines_str = parts[1];
+            let role_str = parts[1];
             if name.is_empty() || !is_valid_tag_name(name) {
                 return None;
             }
-            let lines_owned = lines_str.parse::<usize>().ok();
-            if lines_owned.is_none() {
-                return None;
-            }
-            Some((Some(name.to_string()), lines_owned))
+            let role = match role_str {
+                "start" => Some(RangeRole::Start),
+                "end" => Some(RangeRole::End),
+                _ => return None,
+            };
+            Some((Some(name.to_string()), role))
         }
         _ => None,
     }
@@ -303,18 +315,26 @@ fn is_valid_tag_name(s: &str) -> bool {
     !s.is_empty() && s.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
 }
 
-/// Parse an `@agents:`, `@agents(name):`, or `@agents(name, N):` inline marker.
-/// Returns `Some((name, lines_owned, rest_of_line))` on match.
-fn parse_inline_marker(s: &str) -> Option<(Option<String>, Option<usize>, &str)> {
+/// Parse an `@agents:`, `@agents(name):`, or `@agents(name, start/end):` inline marker.
+/// Returns `Some((name, range_role, rest_of_line))` on match.
+/// Also matches `@agents(name, end)` without a colon (end markers have no body).
+fn parse_inline_marker(s: &str) -> Option<(Option<String>, Option<RangeRole>, &str)> {
     if let Some(rest) = s.strip_prefix("@agents:") {
         return Some((None, None, rest));
     }
     if let Some(rest) = s.strip_prefix("@agents(") {
+        // Try with colon first: @agents(name):
         if let Some(paren_end) = rest.find("):") {
             let inner = &rest[..paren_end];
-            if let Some((name, lines_owned)) = parse_tag_params(inner) {
+            if let Some((name, range_role)) = parse_tag_params(inner) {
                 let after_colon = &rest[paren_end + 2..];
-                return Some((name, lines_owned, after_colon));
+                return Some((name, range_role, after_colon));
+            }
+        }
+        // Try without colon for end markers: @agents(name, end)
+        if let Some(inner) = rest.strip_suffix(')') {
+            if let Some((name, Some(RangeRole::End))) = parse_tag_params(inner) {
+                return Some((name, Some(RangeRole::End), ""));
             }
         }
     }
@@ -355,7 +375,7 @@ fn parse_c_style(lines: &[&str], limit: usize) -> Option<AgentsBlock> {
         if trimmed.starts_with("/**") || trimmed.starts_with("/*") {
             let start = i + 1;
             let mut block_lines: Vec<String> = Vec::new();
-            let mut found_marker: Option<(Option<String>, Option<usize>)> = None;
+            let mut found_marker: Option<(Option<String>, Option<RangeRole>)> = None;
 
             // Check if @agents is on the opening line
             if let Some(m) = is_block_marker(trimmed, "//") {
@@ -373,10 +393,10 @@ fn parse_c_style(lines: &[&str], limit: usize) -> Option<AgentsBlock> {
                 }
                 if bl.ends_with("*/") || bl == "*/" {
                     block_lines.push(bl.to_string());
-                    if let Some((name, lines_owned)) = found_marker {
+                    if let Some((name, _range_role)) = found_marker {
                         let raw = block_lines.join("\n");
                         let body_lines = extract_inner_lines_block(&block_lines);
-                        return Some(build_block(raw, name, lines_owned, body_lines, start, j + 1));
+                        return Some(build_block(raw, name, body_lines, start, j + 1));
                     }
                     break;
                 }
@@ -384,10 +404,10 @@ fn parse_c_style(lines: &[&str], limit: usize) -> Option<AgentsBlock> {
                 j += 1;
             }
             if found_marker.is_some() && j >= lines.len() {
-                let (name, lines_owned) = found_marker.unwrap();
+                let (name, _range_role) = found_marker.unwrap();
                 let raw = block_lines.join("\n");
                 let body_lines = extract_inner_lines_block(&block_lines);
-                return Some(build_block(raw, name, lines_owned, body_lines, start, j));
+                return Some(build_block(raw, name, body_lines, start, j));
             }
         }
 
@@ -395,7 +415,7 @@ fn parse_c_style(lines: &[&str], limit: usize) -> Option<AgentsBlock> {
         if trimmed.starts_with("//") {
             let start = i + 1;
             let mut block_lines: Vec<String> = vec![trimmed.to_string()];
-            let mut found_marker: Option<(Option<String>, Option<usize>)> =
+            let mut found_marker: Option<(Option<String>, Option<RangeRole>)> =
                 is_block_marker(trimmed, "//");
             let mut j = i + 1;
 
@@ -413,10 +433,10 @@ fn parse_c_style(lines: &[&str], limit: usize) -> Option<AgentsBlock> {
                 j += 1;
             }
 
-            if let Some((name, lines_owned)) = found_marker {
+            if let Some((name, _range_role)) = found_marker {
                 let raw = block_lines.join("\n");
                 let body_lines = extract_inner_lines_line_comment(&block_lines, "//");
-                return Some(build_block(raw, name, lines_owned, body_lines, start, j));
+                return Some(build_block(raw, name, body_lines, start, j));
             }
         }
 
@@ -438,30 +458,28 @@ fn parse_line_comment(lines: &[&str], limit: usize, style: CommentStyle) -> Opti
         if trimmed.starts_with(prefix) {
             let start = i + 1;
             let mut block_lines: Vec<String> = vec![trimmed.to_string()];
-            let mut found_marker: Option<(Option<String>, Option<usize>)> =
+            let mut found_marker: Option<(Option<String>, Option<RangeRole>)> =
                 is_block_marker(trimmed, prefix);
             let mut j = i + 1;
 
             while j < lines.len() {
                 let bl = lines[j].trim();
-                if !bl.starts_with(prefix) && !bl.is_empty() {
+                if !bl.starts_with(prefix) {
                     break;
                 }
-                if bl.starts_with(prefix) {
-                    if j < limit && found_marker.is_none() {
-                        if let Some(m) = is_block_marker(bl, prefix) {
-                            found_marker = Some(m);
-                        }
+                if j < limit && found_marker.is_none() {
+                    if let Some(m) = is_block_marker(bl, prefix) {
+                        found_marker = Some(m);
                     }
-                    block_lines.push(bl.to_string());
                 }
+                block_lines.push(bl.to_string());
                 j += 1;
             }
 
-            if let Some((name, lines_owned)) = found_marker {
+            if let Some((name, _range_role)) = found_marker {
                 let raw = block_lines.join("\n");
                 let body_lines = extract_inner_lines_line_comment(&block_lines, prefix);
-                return Some(build_block(raw, name, lines_owned, body_lines, start, j));
+                return Some(build_block(raw, name, body_lines, start, j));
             }
         }
         i += 1;
@@ -481,18 +499,18 @@ fn parse_python_docstring(lines: &[&str], limit: usize) -> Option<AgentsBlock> {
             };
             let start = i + 1;
             let mut block_lines: Vec<String> = vec![trimmed.to_string()];
-            let mut found_marker: Option<(Option<String>, Option<usize>)> = extract_docstring_marker(trimmed);
+            let mut found_marker: Option<(Option<String>, Option<RangeRole>)> = extract_docstring_marker(trimmed);
 
             // Single-line docstring
             let after_open = &trimmed[3..];
             if after_open.contains(delim) {
-                if let Some((name, lines_owned)) = found_marker {
+                if let Some((name, _range_role)) = found_marker {
                     let raw = trimmed.to_string();
                     let body = vec![after_open
                         .trim_end_matches(delim)
                         .trim()
                         .to_string()];
-                    return Some(build_block(raw, name, lines_owned, body, start, i + 1));
+                    return Some(build_block(raw, name, body, start, i + 1));
                 }
                 i += 1;
                 continue;
@@ -506,10 +524,10 @@ fn parse_python_docstring(lines: &[&str], limit: usize) -> Option<AgentsBlock> {
                 }
                 block_lines.push(bl.to_string());
                 if bl.ends_with(delim) || bl == delim {
-                    if let Some((name, lines_owned)) = found_marker {
+                    if let Some((name, _range_role)) = found_marker {
                         let raw = block_lines.join("\n");
                         let body_lines = extract_inner_lines_docstring(&block_lines, delim);
-                        return Some(build_block(raw, name, lines_owned, body_lines, start, j + 1));
+                        return Some(build_block(raw, name, body_lines, start, j + 1));
                     }
                     break;
                 }
@@ -523,7 +541,7 @@ fn parse_python_docstring(lines: &[&str], limit: usize) -> Option<AgentsBlock> {
 
 /// Extract `@agents` or `@agents(name)` marker from a docstring line.
 /// Returns `None` if no marker found.
-fn extract_docstring_marker(line: &str) -> Option<(Option<String>, Option<usize>)> {
+fn extract_docstring_marker(line: &str) -> Option<(Option<String>, Option<RangeRole>)> {
     // Find @agents in the line, but not @agents: (inline form)
     if !line.contains("@agents") || line.contains("@agents:") {
         return None;
@@ -591,7 +609,7 @@ fn extract_inner_lines_docstring(lines: &[String], delim: &str) -> Vec<String> {
 }
 
 /// Build an AgentsBlock from extracted inner lines.
-fn build_block(raw: String, name: Option<String>, lines_owned: Option<usize>, inner: Vec<String>, start_line: usize, end_line: usize) -> AgentsBlock {
+fn build_block(raw: String, name: Option<String>, inner: Vec<String>, start_line: usize, end_line: usize) -> AgentsBlock {
     let mut body = Vec::new();
     let mut related = Vec::new();
     let mut see = Vec::new();
@@ -630,7 +648,6 @@ fn build_block(raw: String, name: Option<String>, lines_owned: Option<usize>, in
     AgentsBlock {
         raw,
         name,
-        lines_owned,
         body,
         related,
         see,
@@ -767,7 +784,6 @@ export function refresh() {}"#;
         let block = AgentsBlock {
             raw: String::new(),
             name: None,
-            lines_owned: None,
             body: vec!["OAuth PKCE flow.".to_string()],
             related: vec!["auth-guard.ts".to_string()],
             see: vec![],
@@ -786,7 +802,6 @@ export function refresh() {}"#;
         let block = AgentsBlock {
             raw: String::new(),
             name: None,
-            lines_owned: None,
             body: vec!["Pipeline entry.".to_string()],
             related: vec!["transform.py".to_string()],
             see: vec![],
@@ -805,7 +820,6 @@ export function refresh() {}"#;
         let block = AgentsBlock {
             raw: String::new(),
             name: None,
-            lines_owned: None,
             body: vec!["Core module.".to_string()],
             related: vec![],
             see: vec![],
@@ -1087,7 +1101,6 @@ const y = 2;"#;
         let block = AgentsBlock {
             raw: String::new(),
             name: Some("auth-module".to_string()),
-            lines_owned: None,
             body: vec!["Auth module.".to_string()],
             related: vec![],
             see: vec![],
@@ -1100,58 +1113,61 @@ const y = 2;"#;
     }
 
     #[test]
-    fn test_lines_owned_file_header_block_comment() {
-        let src = r#"/**
- * @agents(auth-module, 15)
- * OAuth PKCE flow.
- */
-const x = 1;
-"#;
-        let block = parse_agents_block(src, Path::new("test.ts")).unwrap();
-        assert_eq!(block.name, Some("auth-module".to_string()));
-        assert_eq!(block.lines_owned, Some(15));
-    }
-
-    #[test]
-    fn test_lines_owned_file_header_line_comment() {
-        let src = "# @agents(pipeline, 8)\n# Transforms data.\nimport os\n";
-        let block = parse_agents_block(src, Path::new("test.py")).unwrap();
-        assert_eq!(block.name, Some("pipeline".to_string()));
-        assert_eq!(block.lines_owned, Some(8));
-    }
-
-    #[test]
-    fn test_lines_owned_inline_tag() {
-        let src = "const a = 1;\n// @agents(token-check, 5): Must validate first.\nconst b = 2;\n";
+    fn test_range_start_inline_tag() {
+        let src = "const a = 1;\n// @agents(auth-middleware, start): Validates JWT tokens.\nconst b = 2;\n";
         let tags = parse_all_agents_tags(src, Path::new("test.ts"));
         assert_eq!(tags.len(), 1);
-        assert_eq!(tags[0].name, Some("token-check".to_string()));
-        assert_eq!(tags[0].lines_owned, Some(5));
+        assert_eq!(tags[0].name, Some("auth-middleware".to_string()));
+        assert_eq!(tags[0].range_role, Some(RangeRole::Start));
         assert_eq!(tags[0].kind, TagKind::Inline);
     }
 
     #[test]
-    fn test_no_lines_owned_when_absent() {
+    fn test_range_end_inline_tag() {
+        let src = "const a = 1;\n// @agents(auth-middleware, end)\nconst b = 2;\n";
+        let tags = parse_all_agents_tags(src, Path::new("test.ts"));
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].name, Some("auth-middleware".to_string()));
+        assert_eq!(tags[0].range_role, Some(RangeRole::End));
+    }
+
+    #[test]
+    fn test_range_start_and_end_pair() {
+        let src = "// @agents(validate, start): Check input.\nconst x = 1;\nconst y = 2;\n// @agents(validate, end)\n";
+        let tags = parse_all_agents_tags(src, Path::new("test.ts"));
+        assert_eq!(tags.len(), 2);
+        assert_eq!(tags[0].range_role, Some(RangeRole::Start));
+        assert_eq!(tags[1].range_role, Some(RangeRole::End));
+        assert_eq!(tags[0].name, tags[1].name);
+    }
+
+    #[test]
+    fn test_range_invalid_role_rejected() {
+        let src = "// @agents(check, 15): Should not parse.\nconst b = 2;\n";
+        let tags = parse_all_agents_tags(src, Path::new("test.ts"));
+        assert!(tags.is_empty(), "Numeric second param should not parse (use start/end)");
+    }
+
+    #[test]
+    fn test_range_invalid_keyword_rejected() {
+        let src = "// @agents(check, middle): Should not parse.\nconst b = 2;\n";
+        let tags = parse_all_agents_tags(src, Path::new("test.ts"));
+        assert!(tags.is_empty(), "Invalid range keyword should not parse");
+    }
+
+    #[test]
+    fn test_no_range_role_when_absent() {
         let src = "// @agents(token-check): Must validate first.\nconst b = 2;\n";
         let tags = parse_all_agents_tags(src, Path::new("test.ts"));
         assert_eq!(tags.len(), 1);
-        assert_eq!(tags[0].name, Some("token-check".to_string()));
-        assert_eq!(tags[0].lines_owned, None);
+        assert_eq!(tags[0].range_role, None);
     }
 
     #[test]
-    fn test_lines_owned_invalid_not_number() {
-        let src = "// @agents(check, abc): Should not parse.\nconst b = 2;\n";
-        let tags = parse_all_agents_tags(src, Path::new("test.ts"));
-        assert!(tags.is_empty(), "Non-numeric lines_owned should not parse");
-    }
-
-    #[test]
-    fn test_lines_owned_unnamed_tag_not_supported() {
-        // @agents: (no parens) cannot have lines_owned
+    fn test_unnamed_tag_has_no_range_role() {
         let src = "// @agents: Plain tag.\nconst b = 2;\n";
         let tags = parse_all_agents_tags(src, Path::new("test.ts"));
         assert_eq!(tags.len(), 1);
-        assert_eq!(tags[0].lines_owned, None);
+        assert_eq!(tags[0].range_role, None);
     }
 }

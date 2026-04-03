@@ -1,0 +1,167 @@
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+index 000000000..a01557aa5
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,21 @@
++# Agent Context
++
++This codebase uses `@agents` tags — structured comments in source files that describe what each file does and how it relates to others.
++
++## Reading tags
++
++Look for `@agents(name)` in the first few lines of source files. Example:
++
++```python
++# @agents(pylinter)
++# Core linter orchestrator. PyLinter.check() is the main entry point.
++# Related: pylint/lint/expand_modules.py#expand-modules
++```
++
++- **Body**: what the file does
++- **Related**: repo-root-relative paths to related files. `#name` fragments point to specific tagged files.
++- **Warnings**: lines starting with `Don't`, `Warning:`, `Note:`, or `Avoid:`
++
++## Before editing a file
++
++Read the `@agents` header (if present) to understand the file's role and what other files it coordinates with. Follow `Related:` links to understand the dependency chain.
+diff --git a/pylint/config/config_initialization.py b/pylint/config/config_initialization.py
+index f688c4cf3..4fcc38d4f 100644
+--- a/pylint/config/config_initialization.py
++++ b/pylint/config/config_initialization.py
+@@ -1,3 +1,7 @@
++# @agents(config-init)
++# Config initialization. Parses config files, CLI args, and plugins into a PyLinter config.
++# Related: pylint/lint/run.py#lint-run, pylint/lint/pylinter.py#pylinter
++
+ # Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ # For details: https://github.com/PyCQA/pylint/blob/main/LICENSE
+ # Copyright (c) https://github.com/PyCQA/pylint/blob/main/CONTRIBUTORS.txt
+diff --git a/pylint/lint/__init__.py b/pylint/lint/__init__.py
+index 86186ebd4..18701ce05 100644
+--- a/pylint/lint/__init__.py
++++ b/pylint/lint/__init__.py
+@@ -1,3 +1,7 @@
++# @agents(lint-public-api)
++# Public API for the lint package. Re-exports PyLinter, Run, check_parallel, and utilities.
++# Related: pylint/lint/pylinter.py#pylinter, pylint/lint/run.py#lint-run, pylint/lint/parallel.py#lint-parallel
++
+ # Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ # For details: https://github.com/PyCQA/pylint/blob/main/LICENSE
+ # Copyright (c) https://github.com/PyCQA/pylint/blob/main/CONTRIBUTORS.txt
+diff --git a/pylint/lint/base_options.py b/pylint/lint/base_options.py
+index a25827b2b..561866b69 100644
+--- a/pylint/lint/base_options.py
++++ b/pylint/lint/base_options.py
+@@ -1,3 +1,8 @@
++# @agents(lint-base-options)
++# Option definitions for PyLinter and Run. Defines CLI flags including
++# --ignore, --ignore-paths, --ignore-patterns, and --recursive.
++# Related: pylint/lint/pylinter.py#pylinter, pylint/lint/run.py#lint-run
++
+ # Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ # For details: https://github.com/PyCQA/pylint/blob/main/LICENSE
+ # Copyright (c) https://github.com/PyCQA/pylint/blob/main/CONTRIBUTORS.txt
+diff --git a/pylint/lint/caching.py b/pylint/lint/caching.py
+index 573b97628..68d782d26 100644
+--- a/pylint/lint/caching.py
++++ b/pylint/lint/caching.py
+@@ -1,3 +1,7 @@
++# @agents(lint-caching)
++# Result caching. Saves and loads LinterStats to avoid re-checking unchanged files.
++# Related: pylint/lint/pylinter.py#pylinter
++
+ # Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ # For details: https://github.com/PyCQA/pylint/blob/main/LICENSE
+ # Copyright (c) https://github.com/PyCQA/pylint/blob/main/CONTRIBUTORS.txt
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index b20cd873c..4e41e4fa0 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -1,3 +1,9 @@
++# @agents(expand-modules)
++# Module discovery and expansion. expand_modules() takes file/package paths,
++# applies ignore filtering (_is_in_ignore_list_re), and resolves them to
++# module descriptions. Called by PyLinter._expand_files() for non-recursive mode.
++# Related: pylint/lint/pylinter.py#pylinter, pylint/lint/utils.py#lint-utils
++
+ # Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ # For details: https://github.com/PyCQA/pylint/blob/main/LICENSE
+ # Copyright (c) https://github.com/PyCQA/pylint/blob/main/CONTRIBUTORS.txt
+diff --git a/pylint/lint/message_state_handler.py b/pylint/lint/message_state_handler.py
+index 4306fea6f..43ab6c021 100644
+--- a/pylint/lint/message_state_handler.py
++++ b/pylint/lint/message_state_handler.py
+@@ -1,3 +1,8 @@
++# @agents(message-state)
++# Message enable/disable state management. Handles pragma-based and config-based
++# message suppression (e.g. # pylint: disable=C0114).
++# Related: pylint/lint/pylinter.py#pylinter
++
+ # Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ # For details: https://github.com/PyCQA/pylint/blob/main/LICENSE
+ # Copyright (c) https://github.com/PyCQA/pylint/blob/main/CONTRIBUTORS.txt
+diff --git a/pylint/lint/parallel.py b/pylint/lint/parallel.py
+index f60c05ab0..2e5329a50 100644
+--- a/pylint/lint/parallel.py
++++ b/pylint/lint/parallel.py
+@@ -1,3 +1,7 @@
++# @agents(lint-parallel)
++# Parallel checking. Distributes file items across worker processes using multiprocessing.
++# Related: pylint/lint/pylinter.py#pylinter, pylint/lint/utils.py#lint-utils
++
+ # Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ # For details: https://github.com/PyCQA/pylint/blob/main/LICENSE
+ # Copyright (c) https://github.com/PyCQA/pylint/blob/main/CONTRIBUTORS.txt
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 53345a6b1..77de4a6f2 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -1,3 +1,10 @@
++# @agents(pylinter)
++# Core linter orchestrator. PyLinter.check() is the main entry point.
++# In recursive mode, _discover_files() walks directories to find .py files
++# and packages. Discovered files are then passed to _expand_files() which
++# delegates to expand_modules() for ignore filtering and module resolution.
++# Related: pylint/lint/expand_modules.py#expand-modules, pylint/lint/parallel.py#lint-parallel, pylint/lint/run.py#lint-run, pylint/lint/base_options.py#lint-base-options
++
+ # Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ # For details: https://github.com/PyCQA/pylint/blob/main/LICENSE
+ # Copyright (c) https://github.com/PyCQA/pylint/blob/main/CONTRIBUTORS.txt
+diff --git a/pylint/lint/report_functions.py b/pylint/lint/report_functions.py
+index 7d1674977..61c143cbd 100644
+--- a/pylint/lint/report_functions.py
++++ b/pylint/lint/report_functions.py
+@@ -1,3 +1,7 @@
++# @agents(lint-reports)
++# Report generation. Formats lint statistics into tables for output.
++# Related: pylint/lint/pylinter.py#pylinter
++
+ # Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ # For details: https://github.com/PyCQA/pylint/blob/main/LICENSE
+ # Copyright (c) https://github.com/PyCQA/pylint/blob/main/CONTRIBUTORS.txt
+diff --git a/pylint/lint/run.py b/pylint/lint/run.py
+index 778e64441..cbf01601a 100644
+--- a/pylint/lint/run.py
++++ b/pylint/lint/run.py
+@@ -1,3 +1,7 @@
++# @agents(lint-run)
++# CLI entry point. Run parses args, creates a PyLinter, configures it, and calls linter.check().
++# Related: pylint/lint/pylinter.py#pylinter, pylint/lint/base_options.py#lint-base-options, pylint/config/config_initialization.py#config-init
++
+ # Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ # For details: https://github.com/PyCQA/pylint/blob/main/LICENSE
+ # Copyright (c) https://github.com/PyCQA/pylint/blob/main/CONTRIBUTORS.txt
+diff --git a/pylint/lint/utils.py b/pylint/lint/utils.py
+index 30694c25c..8584065f5 100644
+--- a/pylint/lint/utils.py
++++ b/pylint/lint/utils.py
+@@ -1,3 +1,8 @@
++# @agents(lint-utils)
++# Lint utilities. fix_import_path manages sys.path for checking, get_python_path
++# finds package roots, prepare_crash_report generates bug report templates.
++# Related: pylint/lint/pylinter.py#pylinter, pylint/lint/expand_modules.py#expand-modules
++
+ # Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ # For details: https://github.com/PyCQA/pylint/blob/main/LICENSE
+ # Copyright (c) https://github.com/PyCQA/pylint/blob/main/CONTRIBUTORS.txt

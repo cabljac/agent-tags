@@ -322,7 +322,6 @@ fn cmd_check(
                 &cached.path,
                 header.start_line,
                 header.end_line,
-                header.lines_owned,
                 repo,
                 config.stale_commit_gap,
                 config.stale_diff_percent,
@@ -582,7 +581,6 @@ fn cmd_hook(
                 &cached.path,
                 header.start_line,
                 header.end_line,
-                header.lines_owned,
                 repo,
                 config.stale_commit_gap,
                 config.stale_diff_percent,
@@ -686,7 +684,7 @@ mod tests {
         AgentsTag {
             file: file.to_string(),
             name: None,
-            lines_owned: None,
+            range_role: None,
             line,
             text: text.iter().map(|s| s.to_string()).collect(),
             kind,
@@ -697,7 +695,7 @@ mod tests {
         AgentsTag {
             file: file.to_string(),
             name: Some(name.to_string()),
-            lines_owned: None,
+            range_role: None,
             line,
             text: text.iter().map(|s| s.to_string()).collect(),
             kind,
