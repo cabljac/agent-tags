@@ -1,6 +1,6 @@
 ---
 name: agent-tags
-description: Write and maintain @agents tags in source code. Use when editing code in a repo with git-agent-tags installed, when asked to add code annotations or context headers, when preparing code for other AI agents to understand, or when @agents tags exist in files being modified.
+description: Write and maintain @agents tags in source code. Use PROACTIVELY — ALWAYS read @agents tags before editing any file in a tagged repo. Use when editing code in a repo with git-agent-tags installed, when asked to add code annotations, when preparing code for other AI agents, or when @agents tags exist in files being modified.
 compatibility: Requires git-agent-tags CLI (cargo install). Works in any git repo.
 ---
 
@@ -30,13 +30,13 @@ For each file you meaningfully changed:
 2. If the file has no header and your changes are substantial (new file, major refactor, non-obvious logic), add one.
 3. For tricky code locations, add inline `@agents:` tags to explain constraints a future editor would get wrong without the note.
 
-Then validate:
+**Always validate before committing:**
 
 ```bash
 git agent-tags check
 ```
 
-Fix any broken references or stale warnings before committing. If `check` reports a broken fragment reference, either fix the `Related:` path or update/add the named tag in the target file.
+This is not optional. Fix any broken references or stale warnings before committing. If `check` reports a broken fragment reference, either fix the `Related:` path or update/add the named tag in the target file.
 
 ## Tag syntax
 
@@ -133,6 +133,19 @@ Use the file's language:
 | `#` | Python, Ruby, Shell, YAML, TOML |
 | `--` | Lua, Haskell |
 | `"""` | Python docstrings |
+
+## When to write or update tags
+
+**Always update tags when:**
+- You change a function's signature or behavior that other files depend on
+- You add a new file that coordinates with existing tagged files
+- You add, remove, or rename a file mentioned in a `Related:` link
+- You change architectural boundaries (move code between files, extract modules)
+
+**Skip tag updates when:**
+- Minor bug fixes that don't change interfaces or relationships
+- Cosmetic changes (formatting, renaming local variables)
+- Test-only changes
 
 ## What makes a good tag
 
