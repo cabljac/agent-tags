@@ -1040,6 +1040,29 @@ export const prerender = true;
 
       mobileCards.forEach(function(card) { mobileObserver.observe(card); });
 
+      // Swipe on code panel syncs to description carousel
+      var codePanelEl = document.querySelector('.code-panel');
+      var touchStartX = 0;
+      if (codePanelEl) {
+        codePanelEl.style.touchAction = 'pan-y';
+        codePanelEl.addEventListener('touchstart', function(e) {
+          touchStartX = e.touches[0].clientX;
+        }, { passive: true });
+        codePanelEl.addEventListener('touchend', function(e) {
+          var dx = e.changedTouches[0].clientX - touchStartX;
+          if (Math.abs(dx) < 40) return;
+          var next = dx < 0 ? Math.min(active + 1, STEPS.length - 1) : Math.max(active - 1, 0);
+          if (next !== active) {
+            var card = mobileCards[next];
+            if (card) mobileSteps.scrollTo({ left: card.offsetLeft - 16, behavior: 'smooth' });
+          }
+        }, { passive: true });
+      }
+
+      // Remove pointer-events:none on mobile so touch works
+      var codeAreaEl = document.querySelector('.code-area');
+      if (codeAreaEl) codeAreaEl.style.pointerEvents = 'auto';
+
       active = 0;
       updateCode(0);
     } else {
