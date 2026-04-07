@@ -1,0 +1,978 @@
+---
+export const prerender = true;
+---
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>agent-tags — structured annotations for AI coding agents</title>
+  <meta name="description" content="Give AI agents the context they need — directly in your source code. No AST parsing. Any language. Grep-fast." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+  <style is:global>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0d0f17;
+      --bg-code: #0a0c14;
+      --accent: #34d399;
+      --border: #1a1d2a;
+      --text: #c0c5d4;
+      --text-dim: #6b7280;
+      --text-muted: #2d3148;
+      --font: 'Instrument Sans', system-ui, sans-serif;
+      --mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+      --nav-h: 56px;
+      color-scheme: dark;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    ::selection { background: rgba(52, 211, 153, 0.25); color: var(--text); }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(52, 211, 153, 0.2); border-radius: 3px; }
+
+    /* ── NAV ── */
+    .nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      height: var(--nav-h);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 clamp(1.5rem, 4vw, 3rem);
+      border-bottom: 1px solid var(--border);
+      background: rgba(13, 15, 23, 0.85);
+      backdrop-filter: blur(16px);
+    }
+    .nav-logo { font-family: var(--mono); font-size: 0.95rem; font-weight: 600; color: var(--accent); text-decoration: none; }
+    .nav-links { display: flex; gap: 1.5rem; align-items: center; }
+    .nav-links a { font-family: var(--mono); font-size: 0.8rem; color: var(--text-dim); text-decoration: none; transition: color 0.15s; }
+    .nav-links a:hover { color: var(--accent); }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: var(--nav-h) 2rem 4rem;
+      position: relative;
+    }
+    .hero::before {
+      content: ''; position: absolute; top: var(--nav-h); left: 50%; transform: translateX(-50%);
+      width: 60%; height: 50%;
+      background: radial-gradient(ellipse at center, rgba(52,211,153,0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero h1 {
+      font-family: var(--mono); font-size: clamp(3rem, 8vw, 5.5rem); font-weight: 700;
+      letter-spacing: -0.04em; line-height: 1.05;
+      background: linear-gradient(160deg, #e2e8f0 25%, var(--accent) 80%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      animation: fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.1s both;
+    }
+    .hero p {
+      font-size: 1.15rem; color: var(--text-dim); max-width: 34rem;
+      margin: 1.5rem auto 2.5rem; line-height: 1.7;
+      animation: fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.25s both;
+    }
+    .hero-actions { display: flex; gap: 1rem; animation: fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) 0.4s both; }
+
+    .btn {
+      font-family: var(--mono); font-size: 0.85rem; font-weight: 500;
+      padding: 0.65rem 1.5rem; border-radius: 6px; text-decoration: none; transition: all 0.2s;
+    }
+    .btn-primary { background: var(--accent); color: var(--bg); border: 1px solid var(--accent); }
+    .btn-primary:hover { background: #6ee7b7; box-shadow: 0 0 30px rgba(52,211,153,0.2); }
+    .btn-ghost { border: 1px solid var(--text-muted); color: var(--text-dim); }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── SCROLLY: TALL SPACER PATTERN ── */
+    .scrolly-outer {
+      position: relative;
+      /* height set by JS: STEPS.length * 100vh */
+    }
+
+    .scrolly-inner {
+      position: sticky;
+      top: var(--nav-h);
+      height: calc(100vh - var(--nav-h));
+      display: flex;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 1rem;
+    }
+
+    .scrolly-inner::before {
+      content: ''; position: absolute; top: 0; left: 1rem; right: 1rem; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(52,211,153,0.2), transparent);
+    }
+
+    /* Code panel — on the right */
+    .code-panel {
+      flex: 0 0 58%;
+      background: var(--bg-code);
+      border-left: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+      position: relative;
+      order: 2;
+    }
+
+    .code-area {
+      flex: 1;
+      overflow-y: scroll;
+      scrollbar-width: none;
+      padding: 20px 0;
+      font-family: var(--mono); font-size: 12.5px; line-height: 1.8;
+      pointer-events: none;
+      transition: filter 0.5s ease, opacity 0.5s ease;
+    }
+    .code-panel.terminal-active .code-area {
+      filter: blur(4px);
+      opacity: 0.3;
+    }
+    .code-area::-webkit-scrollbar { display: none; }
+
+    .code-line {
+      display: flex; padding: 0 20px;
+      border-left: 2px solid transparent;
+      transition: all 0.5s cubic-bezier(0.4,0,0.2,1);
+    }
+    .code-line.hl { background: rgba(52,211,153,0.1); border-left-color: var(--accent); }
+    .code-line.focus { background: rgba(52,211,153,0.03); }
+    .code-line.dim { opacity: 0.15; }
+
+    .ln {
+      flex: 0 0 32px; color: #1e2235; font-size: 11px; text-align: right;
+      padding-right: 16px; user-select: none; font-variant-numeric: tabular-nums; transition: color 0.5s;
+    }
+    .code-line.hl .ln { color: var(--accent); }
+    .code-text { flex: 1; white-space: pre; color: var(--text); }
+
+    .tc { color: #4b5563; }
+    .tk { color: #c084fc; }
+    .ts { color: #34d399; }
+    .tn { color: #fbbf24; }
+    .ta { color: inherit; transition: color 0.4s; }
+    .code-line.hl .ta,
+    .code-line.focus .ta { color: #34d399; font-weight: 600; }
+
+    /* Terminal panel — Claude Code style, nested inside code panel */
+    .terminal-panel {
+      position: absolute;
+      top: 50%;
+      left: 16px;
+      right: 16px;
+      transform: translateY(-50%) scale(0.97);
+      height: min(60%, 420px);
+      background: #12131e;
+      display: flex; flex-direction: column;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.5s ease, transform 0.4s ease;
+      z-index: 2;
+      border-radius: 10px;
+      border: 1px solid #252840;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(52, 211, 153, 0.05);
+      overflow: hidden;
+    }
+    .terminal-panel.visible {
+      opacity: 1;
+      transform: translateY(-50%) scale(1);
+    }
+    .terminal-header {
+      padding: 10px 14px;
+      font-family: var(--mono); font-size: 11px; color: #6b7280;
+      background: #16182a;
+      border-bottom: 1px solid #1e2030;
+      display: flex; align-items: center; gap: 12px;
+      user-select: none;
+      border-radius: 10px 10px 0 0;
+    }
+    .terminal-dots { display: flex; gap: 6px; }
+    .terminal-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .terminal-dot.red { background: #ff5f57; }
+    .terminal-dot.yellow { background: #febc2e; }
+    .terminal-dot.green { background: #28c840; }
+    .terminal-body {
+      flex: 1; padding: 12px 16px;
+      font-family: var(--mono); font-size: 11.5px; line-height: 1.65;
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+    .terminal-body::-webkit-scrollbar { display: none; }
+    .term-line {
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      margin-bottom: 2px;
+    }
+    .term-line.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    /* User prompt — orange bar */
+    .term-user {
+      background: rgba(232, 145, 90, 0.12);
+      border-left: 3px solid #e8915a;
+      padding: 6px 12px;
+      margin: 8px 0;
+      border-radius: 0 4px 4px 0;
+      color: #e2e8f0;
+    }
+    .term-user-icon { color: #e8915a; font-weight: 700; }
+    /* Assistant text */
+    .term-assistant { color: #a0a8c0; padding: 2px 0; }
+    /* Tool call block */
+    .term-tool {
+      background: rgba(52, 211, 153, 0.06);
+      border-left: 2px solid rgba(52, 211, 153, 0.3);
+      padding: 4px 12px;
+      margin: 4px 0;
+      border-radius: 0 4px 4px 0;
+    }
+    .term-tool-label { color: #34d399; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .term-tool-cmd { color: #9ca3af; }
+    /* Tool output */
+    .term-tool-output { color: #4b5563; padding-left: 14px; }
+    .term-tool-output-accent { color: #34d399; padding-left: 14px; }
+    .term-tool-output-warn { color: #e8915a; padding-left: 14px; }
+    /* Status bar */
+    .term-status {
+      border-top: 1px solid #1e2030;
+      padding: 6px 14px;
+      font-family: var(--mono); font-size: 10px; color: #3b3f54;
+      display: flex; justify-content: space-between;
+      background: #16182a;
+      border-radius: 0 0 10px 10px;
+    }
+    /* Blank spacer */
+    .term-blank { height: 8px; }
+
+    /* Step display — on the left */
+    .step-display {
+      flex: 0 0 42%;
+      display: flex; flex-direction: column; justify-content: center;
+      padding: 0 clamp(28px, 3vw, 56px);
+      padding-bottom: 4rem;
+      position: relative;
+      order: 1;
+    }
+
+    .step-content {
+      transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+    .step-content.exiting {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    .step-content.entering {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+
+    .step-label {
+      font-family: var(--mono); font-size: 11px; font-weight: 600;
+      letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px;
+      color: var(--accent);
+    }
+    .step-desc {
+      font-size: 15px; line-height: 1.75; max-width: 340px; color: #9ca3af;
+      white-space: pre-line;
+    }
+
+    /* Progress dots — pinned to bottom */
+    .step-dots {
+      display: flex; gap: 8px;
+      position: absolute;
+      bottom: 2rem;
+      left: clamp(28px, 3vw, 56px);
+    }
+    .step-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--text-muted); transition: all 0.3s;
+    }
+    .step-dot.active {
+      background: var(--accent);
+      box-shadow: 0 0 6px rgba(52,211,153,0.4);
+    }
+
+    /* ── INSTALL SECTION ── */
+    .install {
+      padding: 6rem 2rem;
+      text-align: center;
+      position: relative;
+    }
+    .install::before {
+      content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 40%; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(52,211,153,0.15), transparent);
+    }
+    .install h2 {
+      font-family: var(--mono); font-size: 1.6rem; font-weight: 600;
+      letter-spacing: -0.02em; color: var(--text); margin-bottom: 1rem;
+    }
+    .install-sub {
+      color: var(--text-dim); font-size: 1rem; margin-bottom: 2.5rem; max-width: 28rem; margin-left: auto; margin-right: auto;
+    }
+    .install-cmd {
+      display: inline-flex; align-items: center; gap: 12px;
+      background: #111420; border: 1px solid var(--border); border-radius: 8px;
+      padding: 14px 24px;
+      font-family: var(--mono); font-size: 0.95rem; color: var(--text);
+    }
+    .install-cmd .dollar { color: var(--accent); user-select: none; }
+    .install-alt {
+      margin-top: 1.5rem; font-size: 0.8rem; color: var(--text-muted);
+    }
+    .install-alt code {
+      font-family: var(--mono); color: var(--text-dim);
+      background: #111420; padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border);
+    }
+
+    /* ── FEATURES GRID ── */
+    .features {
+      padding: 4rem 2rem 6rem;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1.5rem;
+    }
+    .feature-card {
+      padding: 1.5rem;
+      background: #111420;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .feature-card:hover {
+      border-color: rgba(52,211,153,0.25);
+      transform: translateY(-2px);
+    }
+    .feature-card h3 {
+      font-family: var(--mono); font-size: 0.85rem; font-weight: 600;
+      color: var(--accent); margin-bottom: 0.5rem;
+    }
+    .feature-card p {
+      font-size: 0.9rem; line-height: 1.6; color: var(--text-dim);
+    }
+    .feature-code {
+      font-family: var(--mono); font-size: 0.75rem; line-height: 1.7;
+      color: var(--text-dim); background: #0a0c14;
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 10px 12px; margin-top: 10px;
+      overflow-x: auto; white-space: pre;
+    }
+    .fc-cmd { color: #6b9e88; }
+
+    /* ── WORKS WITH ── */
+    .works-with {
+      padding: 3rem 2rem 4rem;
+      text-align: center;
+    }
+    .works-with h2 {
+      font-family: var(--mono); font-size: 0.75rem; font-weight: 600;
+      letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted);
+      margin-bottom: 1.5rem;
+    }
+    .agent-list {
+      display: flex; justify-content: center; gap: 2.5rem; flex-wrap: wrap;
+    }
+    .agent-name {
+      font-family: var(--mono); font-size: 0.85rem; color: var(--text-dim);
+      transition: color 0.15s;
+    }
+    .agent-name:hover { color: var(--accent); }
+
+    /* ── CTA ── */
+    .cta {
+      padding: 4rem 2rem 5rem;
+      text-align: center;
+    }
+    .cta h2 {
+      font-family: var(--mono); font-size: 1.4rem; font-weight: 600;
+      color: var(--text); margin-bottom: 0.75rem;
+    }
+    .cta p {
+      color: var(--text-dim); font-size: 0.95rem; margin-bottom: 2rem;
+      max-width: 30rem; margin-left: auto; margin-right: auto;
+    }
+    .cta-actions {
+      display: flex; justify-content: center; gap: 1rem;
+    }
+
+    /* ── FOOTER ── */
+    .footer {
+      border-top: 1px solid var(--border); padding: 3rem 2rem; text-align: center;
+    }
+    .footer-links { display: flex; justify-content: center; gap: 2rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .footer a { font-family: var(--mono); font-size: 0.8rem; color: var(--text-dim); text-decoration: none; transition: color 0.15s; }
+    .footer a:hover { color: var(--accent); }
+    .footer p { font-size: 0.75rem; color: var(--text-muted); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      .nav-links { gap: 1rem; }
+      .nav-links a { font-size: 0.75rem; }
+
+      .hero h1 { font-size: 2.5rem !important; }
+      .hero p { font-size: 1rem; }
+
+      /* Scrollycode: swipe carousel on mobile */
+      .scrolly-outer { height: auto !important; }
+      .scrolly-inner {
+        position: relative; top: auto; height: auto;
+        flex-direction: column; padding: 0;
+      }
+      .scrolly-inner::before { display: none; }
+
+      .code-panel {
+        flex: none; height: 50vh; order: 1;
+        border-left: none; border-bottom: 1px solid var(--border);
+      }
+
+      .step-display {
+        flex: none; order: 2;
+        padding: 0; min-height: auto;
+        overflow-x: auto; overflow-y: hidden;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        display: flex; flex-direction: row;
+        scrollbar-width: none;
+      }
+      .step-display::-webkit-scrollbar { display: none; }
+
+      .step-content {
+        min-width: 100vw;
+        max-width: 100vw;
+        scroll-snap-align: center;
+        padding: 2rem 1.5rem;
+        flex-shrink: 0;
+      }
+
+      /* On mobile, show all steps as swipeable cards instead of single display */
+      .mobile-steps {
+        display: flex;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        gap: 0;
+      }
+      .mobile-steps::-webkit-scrollbar { display: none; }
+      .mobile-step {
+        min-width: 85vw;
+        max-width: 85vw;
+        scroll-snap-align: center;
+        padding: 1.5rem;
+        flex-shrink: 0;
+      }
+      .mobile-step .step-label {
+        font-family: var(--mono); font-size: 11px; font-weight: 600;
+        letter-spacing: 0.1em; text-transform: uppercase;
+        color: var(--accent); margin-bottom: 8px;
+      }
+      .mobile-step .step-desc {
+        font-size: 14px; line-height: 1.7; color: #9ca3af;
+        white-space: pre-line;
+      }
+
+      .step-dots {
+        position: static; justify-content: center;
+        padding: 1rem 0 2rem; display: flex;
+      }
+
+      .features-grid { grid-template-columns: 1fr; }
+      .install-cmd { font-size: 0.8rem; padding: 12px 16px; }
+      .cta-actions { flex-direction: column; align-items: center; }
+    }
+
+    @media (max-width: 480px) {
+      .nav { padding: 0 1rem; }
+      .hero { padding: var(--nav-h) 1rem 2rem; min-height: 85vh; }
+      .hero h1 { font-size: 2rem !important; }
+      .hero-actions { flex-direction: column; align-items: center; }
+
+      .install { padding: 4rem 1rem; }
+      .features { padding: 2rem 1rem 4rem; }
+      .agent-list { gap: 1.5rem; }
+      .footer-links { gap: 1rem; flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <a href="/" class="nav-logo">agent-tags</a>
+    <div class="nav-links">
+      <a href="/docs">Docs</a>
+      <a href="/docs/cli">CLI</a>
+      <a href="/docs/spec">Spec</a>
+      <a href="https://github.com/cabljac/agent-tags">GitHub</a>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <h1>agent-tags</h1>
+    <p>AI agents waste most of their tokens finding the right code, not writing it. @agents tags embed purpose, constraints, and relationships directly in your source — so agents know what matters before touching a line.</p>
+    <div class="hero-actions">
+      <a href="#scrolly-outer" class="btn btn-primary">See how it works</a>
+      <a href="https://github.com/cabljac/agent-tags" class="btn btn-ghost">GitHub</a>
+    </div>
+  </section>
+
+  <section class="scrolly-outer" id="scrolly-outer">
+    <div class="scrolly-inner">
+      <div class="code-panel">
+        <div class="code-area" id="code-area"></div>
+        <div class="terminal-panel" id="terminal-panel">
+          <div class="terminal-header">
+            <div class="terminal-dots">
+              <span class="terminal-dot red"></span>
+              <span class="terminal-dot yellow"></span>
+              <span class="terminal-dot green"></span>
+            </div>
+            Claude Code
+          </div>
+          <div class="terminal-body" id="terminal-body"></div>
+          <div class="term-status">
+            <span>claude-sonnet-4-6 &middot; agent-tags</span>
+            <span>14.2k tokens</span>
+          </div>
+        </div>
+      </div>
+      <div class="step-display">
+        <div class="step-content" id="step-content">
+          <p class="step-label" id="step-label"></p>
+          <p class="step-desc" id="step-desc"></p>
+        </div>
+        <div class="step-dots" id="step-dots"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="install">
+    <h2>Get started in seconds</h2>
+    <p class="install-sub">Works with any language. No configuration needed.</p>
+    <div class="install-cmd">
+      <span class="dollar">$</span> npm install -g agent-tags
+    </div>
+    <p class="install-alt">Or build from source: <code>cargo install --path git-agent-tags</code></p>
+  </section>
+
+  <section class="features">
+    <div class="features-grid">
+      <div class="feature-card">
+        <h3>Any language</h3>
+        <p>Tags live in comments. TypeScript, Python, Rust, Go, Ruby, Java, C++, Swift, Lua, Haskell. If it has comments, it works.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Validated references</h3>
+        <p>Every Related: path is checked. Broken references never reach main.</p>
+        <pre class="feature-code"><span class="fc-cmd">$ agent-tags hook --install</span>
+✓ Installed pre-commit hook.
+
+<span class="fc-cmd">$ agent-tags check</span>
+✓ No issues found.</pre>
+      </div>
+      <div class="feature-card">
+        <h3>SQLite index</h3>
+        <p>Full-text search over all tags. Builds in milliseconds.</p>
+        <pre class="feature-code"><span class="fc-cmd">$ agent-tags index</span>
+✓ 142 files, 87 headers, 156 edges
+
+<span class="fc-cmd">$ agent-tags query search "auth"</span>
+<span class="fc-cmd">$ agent-tags query deps src/auth.ts</span></pre>
+      </div>
+      <div class="feature-card">
+        <h3>Agent skill included</h3>
+        <p>Drop the skill into your repo and compatible agents read tags before editing, update them after, and validate on commit. Coverage improves with every change.</p>
+        <pre class="feature-code"><span class="fc-cmd">cp -r .agents/skills/agent-tags your-repo/</span>
+# Claude Code, Cursor, Copilot, etc.
+# pick it up automatically</pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="works-with">
+    <h2>Works with any agent</h2>
+    <div class="agent-list">
+      <span class="agent-name">Claude Code</span>
+      <span class="agent-name">Cursor</span>
+      <span class="agent-name">GitHub Copilot</span>
+      <span class="agent-name">Windsurf</span>
+      <span class="agent-name">Cline</span>
+    </div>
+  </section>
+
+  <section class="cta">
+    <h2>Ready to try it?</h2>
+    <p>Tag your first file in under a minute. The CLI tells you what's missing and validates everything automatically.</p>
+    <div class="cta-actions">
+      <a href="/docs/getting-started" class="btn btn-primary">Read the docs</a>
+      <a href="https://github.com/cabljac/agent-tags" class="btn btn-ghost">View on GitHub</a>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-links">
+      <a href="/docs">Documentation</a>
+      <a href="/docs/spec">Specification</a>
+      <a href="/docs/cli">CLI Reference</a>
+      <a href="https://github.com/cabljac/agent-tags">GitHub</a>
+    </div>
+    <p>MIT License</p>
+  </footer>
+
+  <script is:inline>
+    try {
+    const CODE = [
+      "/**",
+      " * @agents(auth-module)",
+      " * OAuth PKCE flow for third-party providers.",
+      " * Uses refresh tokens in httpOnly cookies.",
+      " * Related: src/auth/guard.ts#token-validation",
+      " * Related: src/types/auth.d.ts",
+      " * Don\u2019t add session logic here \u2014 see session-manager.ts",
+      " */",
+      "",
+      "import { verify, sign } from 'jsonwebtoken';",
+      "import { getCookie, setCookie } from '../utils/cookies';",
+      "import type { AuthToken, User } from '../types/auth';",
+      "",
+      "// @agents(token-check): Must validate before refresh, not after.",
+      "// Related: src/auth/guard.ts#token-validation",
+      "export function validateToken(token: string): boolean {",
+      "  try {",
+      "    const decoded = verify(token, process.env.JWT_SECRET);",
+      "    return decoded.exp > Date.now() / 1000;",
+      "  } catch {",
+      "    return false;",
+      "  }",
+      "}",
+      "",
+      "// @agents(refresh-flow, start): Handles token refresh cycle.",
+      "// Warning: Never cache refresh tokens in memory.",
+      "// Related: src/auth/session-manager.ts",
+      "export async function refreshToken(req: Request): Promise<AuthToken> {",
+      "  const current = getCookie(req, 'refresh_token');",
+      "  if (!current || !validateToken(current)) {",
+      "    throw new AuthError('Invalid refresh token');",
+      "  }",
+      "",
+      "  const user = await lookupUser(current);",
+      "  const newAccess = sign({ sub: user.id }, process.env.JWT_SECRET, {",
+      "    expiresIn: '15m',",
+      "  });",
+      "",
+      "  const newRefresh = sign({ sub: user.id }, process.env.REFRESH_SECRET, {",
+      "    expiresIn: '7d',",
+      "  });",
+      "",
+      "  setCookie(req, 'refresh_token', newRefresh, { httpOnly: true });",
+      "  return { accessToken: newAccess, expiresIn: 900 };",
+      "}",
+      "// @agents(refresh-flow, end)",
+    ];
+
+    const STEPS = [
+      { title: "File header", desc: "An agent asked to fix a bug here doesn't have to read the whole file to understand it.\n\n\u2022 What the file does\n\u2022 What it depends on\n\u2022 What not to break\n\nSeconds of context instead of minutes of reading.", focus: [1,2,3,4,5,6,7,8], highlight: [2] },
+      { title: "Relationship graph", desc: "Every Related: path is validated by the CLI.\n\nRename a file and forget to update the reference? The pre-commit hook blocks your commit. Cross-file dependencies stay accurate without manual effort.", focus: [5,6], highlight: [5,6] },
+      { title: "Constraints", desc: "The kind of knowledge that usually lives in someone's head.\n\nAn agent sees \"Don't add session logic here\" and respects the boundary. No need to read session-manager.ts to figure that out on its own.", focus: [7], highlight: [7] },
+      { title: "Inline tags", desc: "Named anchors pin context to exact code locations.\n\nOther files reference them with token.ts#token-check. A stable pointer that survives:\n\n\u2022 Refactors\n\u2022 Rebases\n\u2022 Cherry-picks", focus: [14,15,16,17,18,19,20,21,22], highlight: [14] },
+      { title: "Range markers", desc: "Scope what matters.\n\nStaleness detection only fires when code between the markers changes, not when someone edits an unrelated function in the same file.\n\nLess noise. More signal.", focus: [25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46], highlight: [25,46] },
+      { title: "The full picture", desc: "One command before editing.\nOne command after.\n\nThe agent reads context, makes changes, validates nothing is broken. Tags get better every time an agent touches the repo.", focus: [], highlight: [] },
+    ];
+
+    function tokenize(text) {
+      var s = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      s = s.replace(/(@agents(?:\([^)]*\))?)/g, '<span class="ta">$1</span>');
+      s = s.replace(/(\/\/.*$)/gm, '<span class="tc">$1</span>');
+      s = s.replace(/(\*[^/].*$)/gm, '<span class="tc">$1</span>');
+      s = s.replace(/(\/\*\*)/g, '<span class="tc">$1</span>');
+      s = s.replace(/( \*\/)/g, '<span class="tc">$1</span>');
+      s = s.replace(/\b(import|export|from|const|try|catch|return|throw|if|async|new|type|function)\b/g, '<span class="tk">$1</span>');
+      s = s.replace(/('(?:[^'\\]|\\.)*')/g, '<span class="ts">$1</span>');
+      s = s.replace(/\b(true|false|null|undefined|\d+)\b/g, '<span class="tn">$1</span>');
+      return s;
+    }
+
+    // ── Terminal content — Claude Code style ──
+    var TERMINAL_LINES = [
+      { type: 'user', text: 'fix the auth token refresh race condition in src/auth/token.ts' },
+      { type: 'blank' },
+      { type: 'assistant', text: "I'll read the file's agent tags first to understand the context." },
+      { type: 'blank' },
+      { type: 'tool', label: 'Bash', cmd: 'git agent-tags context --for src/auth/token.ts --hops 1' },
+      { type: 'tool-output', text: '## src/auth/token.ts#auth-module' },
+      { type: 'tool-output-dim', text: 'OAuth PKCE flow for third-party providers.' },
+      { type: 'tool-output-dim', text: 'Related: src/auth/guard.ts#token-validation' },
+      { type: 'tool-output-warn', text: "Don\u2019t add session logic here \u2014 see session-manager.ts" },
+      { type: 'blank' },
+      { type: 'assistant', text: 'The tags show this handles OAuth PKCE. The constraint says not to add session logic. Let me fix the race condition in the refresh flow.' },
+      { type: 'blank' },
+      { type: 'tool', label: 'Edit', cmd: 'src/auth/token.ts (lines 28-34)' },
+      { type: 'blank' },
+      { type: 'assistant', text: "Fixed. Let me validate the tags aren\u2019t broken." },
+      { type: 'blank' },
+      { type: 'tool', label: 'Bash', cmd: 'git agent-tags check' },
+      { type: 'tool-output-accent', text: '\u2713 No issues found.' },
+    ];
+
+    var terminalPanel = document.getElementById('terminal-panel');
+    var terminalBody = document.getElementById('terminal-body');
+    var terminalRendered = false;
+    var terminalTimers = [];
+
+    function renderTerminal() {
+      terminalBody.innerHTML = '';
+      TERMINAL_LINES.forEach(function(line) {
+        var div = document.createElement('div');
+        div.className = 'term-line';
+        if (line.type === 'blank') {
+          div.className += ' term-blank';
+        } else if (line.type === 'user') {
+          div.className += ' term-user';
+          div.innerHTML = '<span class="term-user-icon">\u276f</span> ' + line.text;
+        } else if (line.type === 'assistant') {
+          div.className += ' term-assistant';
+          div.textContent = line.text;
+        } else if (line.type === 'tool') {
+          div.className += ' term-tool';
+          div.innerHTML = '<span class="term-tool-label">' + line.label + '</span> <span class="term-tool-cmd">' + line.cmd + '</span>';
+        } else if (line.type === 'tool-output') {
+          div.className += ' term-tool-output-accent';
+          div.textContent = line.text;
+        } else if (line.type === 'tool-output-dim') {
+          div.className += ' term-tool-output';
+          div.textContent = line.text;
+        } else if (line.type === 'tool-output-warn') {
+          div.className += ' term-tool-output-warn';
+          div.textContent = line.text;
+        } else if (line.type === 'tool-output-accent') {
+          div.className += ' term-tool-output-accent';
+          div.textContent = line.text;
+        }
+        terminalBody.appendChild(div);
+      });
+    }
+
+    var codePanel = document.querySelector('.code-panel');
+
+    function showTerminal() {
+      if (!terminalRendered) {
+        renderTerminal();
+        terminalRendered = true;
+      }
+      terminalPanel.classList.add('visible');
+      codePanel.classList.add('terminal-active');
+      // Stagger reveal lines
+      terminalTimers.forEach(clearTimeout);
+      terminalTimers = [];
+      var lines = terminalBody.querySelectorAll('.term-line');
+      lines.forEach(function(el, i) {
+        el.classList.remove('visible');
+        var t = setTimeout(function() { el.classList.add('visible'); }, i * 400);
+        terminalTimers.push(t);
+      });
+    }
+
+    function hideTerminal() {
+      terminalPanel.classList.remove('visible');
+      codePanel.classList.remove('terminal-active');
+      terminalTimers.forEach(clearTimeout);
+      terminalTimers = [];
+    }
+
+    // ── Render code ──
+    var codeArea = document.getElementById('code-area');
+    CODE.forEach(function(line, i) {
+      var div = document.createElement('div');
+      div.className = 'code-line';
+      div.setAttribute('data-ln', String(i + 1));
+      div.innerHTML = '<span class="ln">' + (i + 1) + '</span><span class="code-text">' + tokenize(line) + '</span>';
+      codeArea.appendChild(div);
+    });
+
+    // ── Render dots ──
+    var dotsEl = document.getElementById('step-dots');
+    STEPS.forEach(function(_, i) {
+      var dot = document.createElement('div');
+      dot.className = 'step-dot' + (i === 0 ? ' active' : '');
+      dotsEl.appendChild(dot);
+    });
+
+    // ── Set outer height ──
+    var outer = document.getElementById('scrolly-outer');
+    outer.style.height = (STEPS.length * 50) + 'vh';
+
+    // ── State ──
+    var active = -1;
+    var stepContent = document.getElementById('step-content');
+    var stepLabel = document.getElementById('step-label');
+    var stepDesc = document.getElementById('step-desc');
+    var transitioning = false;
+
+    function updateCode(idx) {
+      var step = STEPS[idx];
+      var hasFocus = step.focus.length > 0;
+      var isLastStep = idx === STEPS.length - 1;
+
+      // Toggle terminal on last step
+      if (isLastStep) {
+        showTerminal();
+      } else {
+        hideTerminal();
+      }
+
+      var lines = codeArea.querySelectorAll('.code-line');
+
+      lines.forEach(function(el) {
+        var ln = parseInt(el.getAttribute('data-ln'));
+        el.classList.remove('hl', 'focus', 'dim');
+        if (hasFocus) {
+          if (step.highlight.indexOf(ln) !== -1) el.classList.add('hl');
+          else if (step.focus.indexOf(ln) !== -1) el.classList.add('focus');
+          else el.classList.add('dim');
+        }
+      });
+
+      if (hasFocus) {
+        var target = lines[step.focus[0] - 1];
+        if (target) {
+          codeArea.style.pointerEvents = 'auto';
+          codeArea.scrollTo({ top: Math.max(0, target.offsetTop - codeArea.clientHeight / 3), behavior: 'smooth' });
+          codeArea.style.pointerEvents = 'none';
+        }
+      }
+    }
+
+    function updateStepDisplay(idx) {
+      if (transitioning) {
+        stepLabel.textContent = STEPS[idx].title;
+        stepDesc.textContent = STEPS[idx].desc;
+        return;
+      }
+
+      transitioning = true;
+      stepContent.classList.add('exiting');
+
+      setTimeout(function() {
+        stepLabel.textContent = STEPS[idx].title;
+        stepDesc.textContent = STEPS[idx].desc;
+        stepContent.classList.remove('exiting');
+        stepContent.classList.add('entering');
+
+        requestAnimationFrame(function() {
+          requestAnimationFrame(function() {
+            stepContent.classList.remove('entering');
+            transitioning = false;
+          });
+        });
+      }, 200);
+
+      // Update dots
+      dotsEl.querySelectorAll('.step-dot').forEach(function(dot, i) {
+        dot.classList.toggle('active', i === idx);
+      });
+    }
+
+    // ── Scroll handler ──
+    function onScroll() {
+      var rect = outer.getBoundingClientRect();
+      var scrollable = outer.offsetHeight - window.innerHeight;
+      if (scrollable <= 0) return;
+
+      var progress = -rect.top / scrollable;
+      var clamped = Math.max(0, Math.min(1, progress));
+      var idx = Math.min(STEPS.length - 1, Math.floor(clamped * STEPS.length));
+
+      if (idx !== active) {
+        active = idx;
+        updateCode(idx);
+        updateStepDisplay(idx);
+      }
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+
+    // ── Mobile: swipe carousel ──
+    var isMobile = window.innerWidth <= 768;
+
+    if (isMobile) {
+      // Replace step-display content with swipeable cards
+      var stepDisplay = document.querySelector('.step-display');
+      stepDisplay.innerHTML = '';
+
+      var mobileSteps = document.createElement('div');
+      mobileSteps.className = 'mobile-steps';
+
+      STEPS.forEach(function(s, i) {
+        var card = document.createElement('div');
+        card.className = 'mobile-step';
+        card.setAttribute('data-idx', String(i));
+        card.innerHTML = '<p class="step-label">' + s.title + '</p><p class="step-desc">' + s.desc + '</p>';
+        mobileSteps.appendChild(card);
+      });
+
+      stepDisplay.appendChild(mobileSteps);
+
+      // Re-add dots
+      var mobileDots = document.createElement('div');
+      mobileDots.className = 'step-dots';
+      mobileDots.id = 'step-dots';
+      STEPS.forEach(function(_, i) {
+        var dot = document.createElement('div');
+        dot.className = 'step-dot' + (i === 0 ? ' active' : '');
+        mobileDots.appendChild(dot);
+      });
+      stepDisplay.appendChild(mobileDots);
+
+      // Observe swipe with IntersectionObserver
+      var mobileCards = mobileSteps.querySelectorAll('.mobile-step');
+      var mobileObserver = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            var idx = parseInt(entry.target.getAttribute('data-idx'));
+            if (idx !== active) {
+              active = idx;
+              updateCode(idx);
+              mobileDots.querySelectorAll('.step-dot').forEach(function(d, i) {
+                d.classList.toggle('active', i === idx);
+              });
+            }
+          }
+        });
+      }, { root: mobileSteps, rootMargin: '0px', threshold: 0.6 });
+
+      mobileCards.forEach(function(card) { mobileObserver.observe(card); });
+
+      active = 0;
+      updateCode(0);
+    } else {
+      // Desktop: scroll-position driven
+      // Initial
+      active = 0;
+      stepLabel.textContent = STEPS[0].title;
+      stepDesc.textContent = STEPS[0].desc;
+      updateCode(0);
+      dotsEl.querySelector('.step-dot').classList.add('active');
+    }
+    } catch(e) { console.error(e); }
+  </script>
+</body>
+</html>

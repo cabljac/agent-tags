@@ -1,0 +1,36 @@
+{
+  "name": "agent-tags",
+  "version": "0.1.0",
+  "description": "Structured annotations for AI coding agents. Embed context directly in source code so agents know what matters before touching a line.",
+  "keywords": [
+    "ai",
+    "agents",
+    "coding",
+    "annotations",
+    "context",
+    "cli",
+    "git",
+    "developer-tools"
+  ],
+  "homepage": "https://agenttags.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cabljac/agent-tags"
+  },
+  "license": "MIT",
+  "author": "Jacob Cable",
+  "bin": {
+    "agent-tags": "bin/agent-tags.js"
+  },
+  "files": [
+    "bin",
+    "README.md"
+  ],
+  "optionalDependencies": {
+    "agent-tags-darwin-arm64": "0.1.0",
+    "agent-tags-darwin-x64": "0.1.0",
+    "agent-tags-linux-x64": "0.1.0",
+    "agent-tags-linux-arm64": "0.1.0",
+    "agent-tags-win32-x64": "0.1.0"
+  }
+}

@@ -1,0 +1,38 @@
+---
+title: Why agent-tags?
+description: How agent-tags compares to other approaches for giving AI agents codebase context.
+---
+
+## Why not just use AGENTS.md?
+
+`AGENTS.md` is great for repo-wide instructions. But it's a single file — it can't express per-file constraints, cross-file relationships, or scoped warnings. `@agents` tags are the per-file extension: they live where the code lives, travel through git, and get validated automatically.
+
+## Why not tree-sitter / code indexing?
+
+Tree-sitter tells you what the code *is* (functions, classes, symbols). `@agents` tags tell you what the code *means* (purpose, constraints, relationships). They're complementary:
+
+| | Tree-sitter / CodeDB | @agents tags |
+|---|---|---|
+| **What it captures** | Syntax structure (functions, classes, imports) | Intent, constraints, relationships |
+| **Discovery** | "Find all functions named X" | "Find code that handles auth" |
+| **Setup cost** | AST parsing, potentially slow backfill | Regex scan, milliseconds |
+| **Maintenance** | Automatic (re-parse on change) | Human/agent-maintained (validated by CLI) |
+| **Infrastructure** | Requires parser per language | Just comments — grep-fast |
+
+The optional SQLite index adds structured queries over tags, but it builds in milliseconds from a simple regex scan — no AST parsing needed.
+
+An agent could use tree-sitter indexing to *find* the right file, then read `@agents` tags to *understand* it and its dependencies without reading every related file.
+
+## Why not just read the code?
+
+Reading code gives you *what* it does. Tags give you *why* it was written that way, what constraints aren't visible in the code, and which other files you need to understand before making changes.
+
+An agent that reads `Don't add session logic here — see session-manager.ts` saves itself from writing code that works locally but breaks the architecture. That constraint isn't visible in the code itself.
+
+## Why comments instead of a separate file?
+
+- **Proximity**: context lives next to the code it describes
+- **Git travel**: tags move with the code through rebases, cherry-picks, and merges
+- **No sync problem**: there's no separate metadata file that can drift from the code
+- **Language-agnostic**: works in any file that supports comments
+- **Zero infrastructure**: no build step, no database, no config

@@ -1,0 +1,148 @@
+---
+title: CLI Reference
+description: Complete command reference for git-agent-tags.
+---
+
+Install via npm:
+
+```bash
+npm install -g agent-tags
+```
+
+Use as `agent-tags <command>` or `npx agent-tags <command>`. If installed via cargo, it's also available as `git agent-tags <command>`.
+
+All commands run from the root of a git repository.
+
+## Context
+
+Output all `@agents` tags as Markdown. This is what agents read before editing.
+
+```bash
+git agent-tags context                          # all tags
+git agent-tags context --for <file>             # scoped to file + 1-hop neighbors
+git agent-tags context --for <file> --hops 2    # deeper graph walk
+git agent-tags context --for <file> --hops 0    # just the file itself
+```
+
+## Validation
+
+```bash
+git agent-tags check                            # broken refs + stale headers
+git agent-tags check --deep                     # also regex heuristics (new exports/imports)
+git agent-tags broken                           # broken references only
+```
+
+## Status & Discovery
+
+```bash
+git agent-tags status                           # repo health summary
+git agent-tags missing                          # files without @agents headers
+git agent-tags suggest                          # suggest Related: links from co-change history
+git agent-tags graph <file>                     # reference graph for a file
+```
+
+## Coverage
+
+Two-tier coverage metrics: file-level (% of files with headers) and line-level (% of lines within start/end range tags).
+
+```bash
+git agent-tags coverage                         # human-readable summary
+git agent-tags coverage --json                  # machine-readable JSON
+```
+
+Reports uncovered hotspots (largest files with no tags) and unmatched range tags (start without end, or vice versa).
+
+## SQLite Index
+
+Build a queryable database of all tags, relationships, and coverage at `.git/agent-tags/tags.db`.
+
+```bash
+git agent-tags index                            # build/rebuild the index
+git agent-tags index --force                    # delete and rebuild from scratch
+git agent-tags index --path                     # print the database path
+```
+
+The database includes:
+- **FTS5 full-text search** over all tag text (porter stemming)
+- **Reference graph** via `edges` table with resolved foreign keys
+- **Per-file coverage stats** in the `coverage` table
+
+### Schema
+
+| Table | Purpose |
+|---|---|
+| `files` | Every scanned file, with `has_header` flag |
+| `headers` | File header data: name, body, warnings, line range |
+| `inline_tags` | Inline tags: name, line, body, range_role |
+| `edges` | Related/See links with resolved target IDs |
+| `coverage` | Per-file line counts: total, header, range, inline |
+| `tags_fts` | FTS5 virtual table over all searchable text |
+| `meta` | Schema version, build timestamp, coverage stats |
+
+## Query
+
+Query the SQLite index with named shortcuts or raw SQL. All subcommands support `--json`.
+
+```bash
+git agent-tags query search <term>              # full-text search across all tags
+git agent-tags query deps <file>                # outgoing dependencies
+git agent-tags query rdeps <file>               # reverse dependencies (what depends on this file)
+git agent-tags query file <file>                # all tags for a specific file
+git agent-tags query uncovered                  # files with no tags, sorted by size
+git agent-tags query sql "<sql>"                # arbitrary read-only SQL against tags.db
+```
+
+Examples:
+
+```bash
+# Find all tags mentioning authentication
+git agent-tags query search "auth"
+
+# What does the main entry point depend on?
+git agent-tags query deps src/main.rs
+
+# JSON output for agent consumption
+git agent-tags query --json rdeps src/auth.rs
+
+# Custom SQL
+git agent-tags query sql "SELECT path, total_lines FROM coverage ORDER BY total_lines DESC LIMIT 10"
+```
+
+## Pre-commit Hook
+
+```bash
+git agent-tags hook                             # run hook check manually
+git agent-tags hook --deep                      # with regex heuristics
+git agent-tags hook --install                   # install as .git/hooks/pre-commit
+```
+
+The hook blocks commits with broken references and warns on stale headers.
+
+## Cache & Reindex
+
+```bash
+git agent-tags reindex                          # rebuild the JSON file cache
+```
+
+The JSON cache (`.git/agent-tags/index.json`) is separate from the SQLite index. It stores parsed headers with mtime-based invalidation for fast incremental updates.
+
+## Configuration
+
+Create `.git-agent-tags.toml` in the repo root:
+
+```toml
+# Glob patterns to ignore (additive with defaults)
+ignore = ["*.test.ts", "*.spec.ts"]
+
+# Commits since header last touched before flagging as stale (default: 10)
+stale_commit_gap = 10
+
+# Percentage of lines changed before flagging as stale (default: 40.0)
+stale_diff_percent = 20.0
+
+# Minimum co-changes for Related: suggestions (default: 3)
+cochange_min_commits = 3
+
+# Max files per commit for co-change analysis (default: 20)
+cochange_max_files = 20
+```

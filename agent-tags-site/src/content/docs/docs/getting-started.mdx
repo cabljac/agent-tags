@@ -1,0 +1,98 @@
+---
+title: Getting Started
+description: Install agent-tags and start annotating your codebase.
+---
+
+## Install
+
+```bash
+npm install -g agent-tags
+```
+
+Or use it without installing:
+
+```bash
+npx agent-tags status
+```
+
+Alternatively, build from source (requires Rust):
+
+```bash
+git clone https://github.com/cabljac/agent-tags.git
+cd agent-tags/git-agent-tags
+cargo install --path .
+```
+
+## Tag your first file
+
+See what's untagged:
+
+```bash
+agent-tags missing
+```
+
+Pick an important file and add a header in its first 30 lines:
+
+```ts
+/**
+ * @agents(auth-module)
+ * OAuth PKCE flow for third-party providers.
+ * Uses refresh tokens in httpOnly cookies.
+ * Related: src/auth/guard.ts#token-validation, src/types/auth.d.ts
+ * Don't add session logic here — see session-manager.ts
+ */
+```
+
+Validate your tags:
+
+```bash
+agent-tags check
+```
+
+## Install the pre-commit hook
+
+Block broken references from ever reaching main:
+
+```bash
+agent-tags hook --install
+```
+
+This adds a git pre-commit hook that runs `agent-tags check` on every commit. Broken `Related:` paths are errors (commit blocked). Stale headers are warnings (commit allowed).
+
+## Give your agent the skill
+
+Copy the [agent skill](https://github.com/cabljac/agent-tags/tree/main/.agents/skills/agent-tags) into your repo:
+
+```bash
+cp -r .agents/skills/agent-tags your-repo/.agents/skills/agent-tags
+```
+
+Agents that support skills (Claude Code, Cursor, Copilot, etc.) will automatically:
+
+1. Read tags before editing any file
+2. Update tags after making changes
+3. Validate references before committing
+
+## How agents use it
+
+**Before editing:**
+
+```bash
+agent-tags context --for src/auth/token.ts --hops 1
+```
+
+The agent reads all tags from the file and its neighbors in the reference graph. It knows the file's purpose, dependencies, and constraints before changing anything.
+
+**After editing:**
+
+```bash
+agent-tags check
+```
+
+The agent validates that no references are broken and no headers are stale. Tags stay accurate automatically.
+
+## Next steps
+
+- [Tag syntax and specification](/docs/spec) — the full format reference
+- [CLI reference](/docs/cli) — every command explained
+- [Why agent-tags?](/docs/why) — how it compares to other approaches
