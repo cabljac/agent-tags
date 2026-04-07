@@ -28,7 +28,7 @@ export const prerender = true;
       color-scheme: dark;
     }
 
-    html { scroll-behavior: smooth; overflow-x: hidden; }
+    html { scroll-behavior: smooth; }
 
     body {
       background: var(--bg);
@@ -887,7 +887,7 @@ export const prerender = true;
 
     // ── Set outer height ──
     var outer = document.getElementById('scrolly-outer');
-    outer.style.height = (STEPS.length * 50) + 'vh';
+    outer.style.height = (STEPS.length * 100) + 'vh';
 
     // ── State ──
     var active = -1;
