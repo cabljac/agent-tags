@@ -7,6 +7,7 @@ export const prerender = true;
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>agent-tags — structured annotations for AI coding agents</title>
   <meta name="description" content="Give AI agents the context they need — directly in your source code. No AST parsing. Any language. Grep-fast." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
@@ -73,9 +74,16 @@ export const prerender = true;
     .hero h1 {
       font-family: var(--mono); font-size: clamp(3rem, 8vw, 5.5rem); font-weight: 700;
       letter-spacing: -0.04em; line-height: 1.05;
-      background: linear-gradient(160deg, #e2e8f0 25%, var(--accent) 80%);
+      --mx: 0.5; --my: 0.5;
+      background: radial-gradient(
+        circle at calc(var(--mx) * 100%) calc(var(--my) * 100%),
+        #a7f3d0 0%, #34d399 25%, #6ee7b7 45%,
+        #2dd4bf 65%, #14b8a6 85%, #0d9488 100%
+      );
       -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.3));
       animation: fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.1s both;
+      transition: --mx 0.15s, --my 0.15s;
     }
     .hero p {
       font-size: 1.15rem; color: var(--text-dim); max-width: 34rem;
@@ -600,8 +608,9 @@ export const prerender = true;
       </div>
       <div class="feature-card">
         <h3>Agent skill included</h3>
-        <p>Drop the skill into your repo and compatible agents read tags before editing, update them after, and validate on commit. Coverage improves with every change.</p>
-        <pre class="feature-code"><span class="fc-cmd">cp -r .agents/skills/agent-tags your-repo/</span>
+        <p>Drop the skill into your repo and compatible agents read tags before editing, update them after, and validate on commit.</p>
+        <pre class="feature-code"><span class="fc-cmd">$ npx degit cabljac/agent-tags/.agents/skills/agent-tags \
+    .agents/skills/agent-tags</span>
 # Claude Code, Cursor, Copilot, etc.
 # pick it up automatically</pre>
       </div>
@@ -639,6 +648,23 @@ export const prerender = true;
   </footer>
 
   <script is:inline>
+    // ── Metallic text follows mouse ──
+    (function() {
+      var h1 = document.querySelector('.hero h1');
+      var hero = document.querySelector('.hero');
+      if (h1 && hero) {
+        hero.addEventListener('mousemove', function(e) {
+          var rect = hero.getBoundingClientRect();
+          var rawX = (e.clientX - rect.left) / rect.width;
+          var rawY = (e.clientY - rect.top) / rect.height;
+          var x = 0.5 + (rawX - 0.5) * 0.4;
+          var y = 0.5 + (rawY - 0.5) * 0.4;
+          h1.style.setProperty('--mx', String(x));
+          h1.style.setProperty('--my', String(y));
+        }, { passive: true });
+      }
+    })();
+
     try {
     const CODE = [
       "/**",
