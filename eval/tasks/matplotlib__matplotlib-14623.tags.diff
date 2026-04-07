@@ -1,0 +1,221 @@
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+index 0000000000..9de55d171f
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,17 @@
++# Agent Context
++
++This codebase uses `@agents` tags — structured comments in source files that describe what each file does and how it relates to others.
++
++Axes limits and scales flow through `axes/_base.py`, `axis.py`, `ticker.py`, and `scale.py`.|3D axes extend the same patterns in `mpl_toolkits/mplot3d/`.
++
++## Reading tags
++
++Look for `@agents(name)` in the first few lines of source files.
++
++- **Body**: what the file does
++- **Related**: repo-root-relative paths. `#name` fragments point to named headers.
++- **Warnings**: `Don't`, `Warning:`, `Note:`, or `Avoid:`
++
++## Before editing
++
++Read headers and follow `Related:` to see coordination points across Matplotlib.
+diff --git a/lib/matplotlib/__init__.py b/lib/matplotlib/__init__.py
+index 350d4c554a..649e840b31 100644
+--- a/lib/matplotlib/__init__.py
++++ b/lib/matplotlib/__init__.py
+@@ -1,3 +1,8 @@
++# @agents(mpl-init)
++# Package configuration, rcParams, and backend selection.
++# Figure and pyplot build on these settings.
++# Related: lib/matplotlib/rcsetup.py#mpl-rcsetup, lib/matplotlib/pyplot.py#mpl-pyplot
++#
+ """
+ This is an object-oriented plotting library.
+ 
+diff --git a/lib/matplotlib/artist.py b/lib/matplotlib/artist.py
+index e33d6dcb6d..2312b20bc6 100644
+--- a/lib/matplotlib/artist.py
++++ b/lib/matplotlib/artist.py
+@@ -1,3 +1,8 @@
++# @agents(mpl-artist)
++# Artist base: clipping, transforms, and property setters.
++# Axes and primitives inherit update logic here.
++# Related: lib/matplotlib/transforms.py#mpl-transforms, lib/matplotlib/axes/_base.py#axes-base
++#
+ from collections import OrderedDict, namedtuple
+ from functools import wraps
+ import inspect
+diff --git a/lib/matplotlib/axes/_base.py b/lib/matplotlib/axes/_base.py
+index da2dea6f57..fcab705be5 100644
+--- a/lib/matplotlib/axes/_base.py
++++ b/lib/matplotlib/axes/_base.py
+@@ -1,3 +1,8 @@
++# @agents(axes-base)
++# AxesBase: data limits, autoscaling, scales, and child artists.
++# Axis objects manage tickers and formatters.
++# Related: lib/matplotlib/axis.py#mpl-axis, lib/matplotlib/ticker.py#mpl-ticker, lib/matplotlib/scale.py#mpl-scale
++#
+ from collections import OrderedDict
+ import itertools
+ import logging
+diff --git a/lib/matplotlib/axis.py b/lib/matplotlib/axis.py
+index 2bb9e41586..a9113c8850 100644
+--- a/lib/matplotlib/axis.py
++++ b/lib/matplotlib/axis.py
+@@ -1,3 +1,8 @@
++# @agents(mpl-axis)
++# XAxis/YAxis: ticks, locators, formatters, and scale linkage.
++# Consults ticker and transforms for placement.
++# Related: lib/matplotlib/axes/_base.py#axes-base, lib/matplotlib/ticker.py#mpl-ticker, lib/matplotlib/transforms.py#mpl-transforms
++#
+ """
+ Classes for the ticks and x and y axis.
+ """
+diff --git a/lib/matplotlib/backend_bases.py b/lib/matplotlib/backend_bases.py
+index 08357ab0b9..dac53fdb63 100644
+--- a/lib/matplotlib/backend_bases.py
++++ b/lib/matplotlib/backend_bases.py
+@@ -1,3 +1,8 @@
++# @agents(mpl-backend-bases)
++# RendererBase and FigureCanvas abstract drawing backends.
++# Figure.draw dispatches here.
++# Related: lib/matplotlib/figure.py#mpl-figure, lib/matplotlib/artist.py#mpl-artist
++#
+ """
+ Abstract base classes define the primitives that renderers and
+ graphics contexts must implement to serve as a matplotlib backend
+diff --git a/lib/matplotlib/colors.py b/lib/matplotlib/colors.py
+index 1e47c00c79..f5ad0256ff 100644
+--- a/lib/matplotlib/colors.py
++++ b/lib/matplotlib/colors.py
+@@ -1,3 +1,8 @@
++# @agents(mpl-colors)
++# Colormaps and normalization used by collections and images.
++# Axes image methods rely on this module.
++# Related: lib/matplotlib/axes/_base.py#axes-base, lib/matplotlib/artist.py#mpl-artist
++#
+ """
+ A module for converting numbers or color arguments to *RGB* or *RGBA*.
+ 
+diff --git a/lib/matplotlib/figure.py b/lib/matplotlib/figure.py
+index 45f3af9e4b..f72cad6410 100644
+--- a/lib/matplotlib/figure.py
++++ b/lib/matplotlib/figure.py
+@@ -1,3 +1,8 @@
++# @agents(mpl-figure)
++# Figure hosts Axes, artists, and layout; drives draw pipeline.
++# Axes objects register here.
++# Related: lib/matplotlib/axes/_base.py#axes-base, lib/matplotlib/artist.py#mpl-artist
++#
+ """
+ The figure module provides the top-level
+ :class:`~matplotlib.artist.Artist`, the :class:`Figure`, which
+diff --git a/lib/matplotlib/lines.py b/lib/matplotlib/lines.py
+index 4737b5d880..1e15756513 100644
+--- a/lib/matplotlib/lines.py
++++ b/lib/matplotlib/lines.py
+@@ -1,3 +1,8 @@
++# @agents(mpl-lines)
++# Line2D artist; interacts with axes data limits and autoscale.
++# Axes add lines via _base helpers.
++# Related: lib/matplotlib/axes/_base.py#axes-base, lib/matplotlib/artist.py#mpl-artist
++#
+ """
+ This module contains all the 2D line class which can draw with a
+ variety of line styles, markers and colors.
+diff --git a/lib/matplotlib/pyplot.py b/lib/matplotlib/pyplot.py
+index ce66bd8948..4905fe0063 100644
+--- a/lib/matplotlib/pyplot.py
++++ b/lib/matplotlib/pyplot.py
+@@ -1,6 +1,11 @@
+ # Note: The first part of this file can be modified in place, but the latter
+ # part is autogenerated by the boilerplate.py script.
+ 
++# @agents(mpl-pyplot)
++# Stateful MATLAB-style API; manages current figure/axes.
++# Delegates drawing to Axes and Figure classes.
++# Related: lib/matplotlib/figure.py#mpl-figure, lib/matplotlib/axes/_base.py#axes-base
++#
+ """
+ `matplotlib.pyplot` is a state-based interface to matplotlib. It provides
+ a MATLAB-like way of plotting.
+diff --git a/lib/matplotlib/rcsetup.py b/lib/matplotlib/rcsetup.py
+index 17d5d7a6dc..0a3b8d663b 100644
+--- a/lib/matplotlib/rcsetup.py
++++ b/lib/matplotlib/rcsetup.py
+@@ -1,3 +1,8 @@
++# @agents(mpl-rcsetup)
++# Default rcParams validation and construction.
++# Feeds matplotlib.__init__ configuration.
++# Related: lib/matplotlib/__init__.py#mpl-init, lib/matplotlib/artist.py#mpl-artist
++#
+ """
+ The rcsetup module contains the default values and the validation code for
+ customization using matplotlib's rc settings.
+diff --git a/lib/matplotlib/scale.py b/lib/matplotlib/scale.py
+index b482a664b7..0c68bcb301 100644
+--- a/lib/matplotlib/scale.py
++++ b/lib/matplotlib/scale.py
+@@ -1,3 +1,8 @@
++# @agents(mpl-scale)
++# ScaleBase subclasses map data <-> screen via transforms.
++# LogScale wires LogTransform and log ticker behavior.
++# Related: lib/matplotlib/transforms.py#mpl-transforms, lib/matplotlib/ticker.py#mpl-ticker, lib/matplotlib/axis.py#mpl-axis
++#
+ import inspect
+ import textwrap
+ 
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index 209a3f92ce..13cfc79c95 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -1,3 +1,8 @@
++# @agents(mpl-ticker)
++# Locator and Formatter classes for tick selection and labeling.
++# Log and symmetric log scales use specialized locators.
++# Related: lib/matplotlib/axis.py#mpl-axis, lib/matplotlib/scale.py#mpl-scale
++#
+ """
+ Tick locating and formatting
+ ============================
+diff --git a/lib/matplotlib/transforms.py b/lib/matplotlib/transforms.py
+index 7ebf980275..5634399b52 100644
+--- a/lib/matplotlib/transforms.py
++++ b/lib/matplotlib/transforms.py
+@@ -1,3 +1,8 @@
++# @agents(mpl-transforms)
++# Affine2D, Bbox, and blended transforms composing axes space.
++# Scales and projections build on these primitives.
++# Related: lib/matplotlib/axis.py#mpl-axis, lib/matplotlib/scale.py#mpl-scale
++#
+ """
+ matplotlib includes a framework for arbitrary geometric
+ transformations that is used determine the final position of all
+diff --git a/lib/matplotlib/units.py b/lib/matplotlib/units.py
+index 678dd6c912..2a75b8c057 100644
+--- a/lib/matplotlib/units.py
++++ b/lib/matplotlib/units.py
+@@ -1,3 +1,8 @@
++# @agents(mpl-units)
++# Registry for converting user data units before plotting.
++# Axis calls into registered converters.
++# Related: lib/matplotlib/axis.py#mpl-axis, lib/matplotlib/axes/_base.py#axes-base
++#
+ """
+ The classes here provide support for using custom classes with
+ Matplotlib, e.g., those that do not expose the array interface but know
+diff --git a/lib/mpl_toolkits/mplot3d/axes3d.py b/lib/mpl_toolkits/mplot3d/axes3d.py
+index 145f231697..58982f11fd 100644
+--- a/lib/mpl_toolkits/mplot3d/axes3d.py
++++ b/lib/mpl_toolkits/mplot3d/axes3d.py
+@@ -1,3 +1,8 @@
++# @agents(axes3d)
++# 3D Axes: projections, z-axis handling, and overrides for limits.
++# Shares base patterns with 2D Axes for scales.
++# Related: lib/matplotlib/axes/_base.py#axes-base, lib/matplotlib/axis.py#mpl-axis, lib/matplotlib/transforms.py#mpl-transforms
++#
+ """
+ axes3d.py, original mplot3d version by John Porter
+ Created: 23 Sep 2005

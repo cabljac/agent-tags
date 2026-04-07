@@ -1,0 +1,218 @@
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+index 000000000..76363c03f
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,17 @@
++# Agent Context
++
++This codebase uses `@agents` tags — structured comments in source files that describe what each file does and how it relates to others.
++
++Documentation builds flow: `application.py` owns the environment; `environment/adapters/toctree.py` resolves toctrees.|Directives in `directives/other.py` emit TOC-related nodes.
++
++## Reading tags
++
++Look for `@agents(name)` in the first few lines of source files.
++
++- **Body**: what the file does
++- **Related**: repo-root-relative paths. `#name` fragments point to named headers.
++- **Warnings**: `Don't`, `Warning:`, `Note:`, or `Avoid:`
++
++## Before editing
++
++Read headers and follow `Related:` to see coordination points across Sphinx.
+diff --git a/sphinx/addnodes.py b/sphinx/addnodes.py
+index e23f570d7..1f204f129 100644
+--- a/sphinx/addnodes.py
++++ b/sphinx/addnodes.py
+@@ -1,3 +1,8 @@
++# @agents(sphinx-addnodes)
++# Custom docutils nodes for Sphinx (toctree, compact paragraphs, etc.).
++# Builders traverse these for navigation.
++# Related: sphinx/environment/adapters/toctree.py#toctree-adapter, sphinx/util/nodes.py#sphinx-util-nodes
++#
+ """Additional docutils nodes."""
+ 
+ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence
+diff --git a/sphinx/application.py b/sphinx/application.py
+index 565125b1e..74dfdb2a0 100644
+--- a/sphinx/application.py
++++ b/sphinx/application.py
+@@ -1,3 +1,8 @@
++# @agents(sphinx-app)
++# Sphinx class: orchestrates extensions, environment, and builders.
++# Creates core Environment and connects events.
++# Related: sphinx/environment/__init__.py#sphinx-env, sphinx/registry.py#sphinx-registry, sphinx/events.py#sphinx-events
++#
+ """Sphinx application class and extensibility interface.
+ 
+ Gracefully adapted from the TextPress system by Armin.
+diff --git a/sphinx/builders/html/__init__.py b/sphinx/builders/html/__init__.py
+index c75338d8f..fb846c8e4 100644
+--- a/sphinx/builders/html/__init__.py
++++ b/sphinx/builders/html/__init__.py
+@@ -1,3 +1,8 @@
++# @agents(sphinx-html-builder)
++# HTML builder: writes documents and navigation structures using env adapters.
++# Consumes resolved toctrees for sidebars.
++# Related: sphinx/environment/adapters/toctree.py#toctree-adapter, sphinx/application.py#sphinx-app, sphinx/util/osutil.py#sphinx-osutil
++#
+ """Several HTML builders."""
+ 
+ import html
+diff --git a/sphinx/directives/__init__.py b/sphinx/directives/__init__.py
+index 7ed0a6e17..000011e36 100644
+--- a/sphinx/directives/__init__.py
++++ b/sphinx/directives/__init__.py
+@@ -1,3 +1,8 @@
++# @agents(sphinx-directives-pkg)
++# Directive registration helpers for Sphinx extensions.
++# other.py registers standard document directives.
++# Related: sphinx/directives/other.py#sphinx-directives-other, sphinx/application.py#sphinx-app
++#
+ """Handlers for additional ReST directives."""
+ 
+ import re
+diff --git a/sphinx/directives/other.py b/sphinx/directives/other.py
+index 35e16e623..a56d5a8f0 100644
+--- a/sphinx/directives/other.py
++++ b/sphinx/directives/other.py
+@@ -1,3 +1,8 @@
++# @agents(sphinx-directives-other)
++# TOC-related directives: toctree, section labels, and includes.
++# Emits addnodes used by builders.
++# Related: sphinx/addnodes.py#sphinx-addnodes, sphinx/environment/adapters/toctree.py#toctree-adapter, sphinx/util/docutils.py#sphinx-docutils-utils
++#
+ import re
+ from typing import TYPE_CHECKING, Any, Dict, List, cast
+ 
+diff --git a/sphinx/environment/__init__.py b/sphinx/environment/__init__.py
+index 1a1dd755f..30fcae7de 100644
+--- a/sphinx/environment/__init__.py
++++ b/sphinx/environment/__init__.py
+@@ -1,3 +1,8 @@
++# @agents(sphinx-env)
++# BuildEnvironment stores docnames, domains, and parsed metadata.
++# Adapters read/write derived views of this state.
++# Related: sphinx/environment/adapters/toctree.py#toctree-adapter, sphinx/environment/collectors/toctree.py#toctree-collector, sphinx/application.py#sphinx-app
++#
+ """Global creation environment."""
+ 
+ import os
+diff --git a/sphinx/environment/adapters/toctree.py b/sphinx/environment/adapters/toctree.py
+index 9678e3c7c..d457878c9 100644
+--- a/sphinx/environment/adapters/toctree.py
++++ b/sphinx/environment/adapters/toctree.py
+@@ -1,3 +1,8 @@
++# @agents(toctree-adapter)
++# Resolves toctree directives into document lists and glob patterns.
++# Used during phase1 assemble and HTML builders.
++# Related: sphinx/environment/__init__.py#sphinx-env, sphinx/directives/other.py#sphinx-directives-other, sphinx/util/nodes.py#sphinx-util-nodes
++#
+ """Toctree adapter for sphinx.environment."""
+ 
+ from typing import TYPE_CHECKING, Any, Iterable, List, Optional, cast
+diff --git a/sphinx/environment/collectors/toctree.py b/sphinx/environment/collectors/toctree.py
+index 52a8fd8d1..2860df98c 100644
+--- a/sphinx/environment/collectors/toctree.py
++++ b/sphinx/environment/collectors/toctree.py
+@@ -1,3 +1,8 @@
++# @agents(toctree-collector)
++# Collects TOC relationships while reading sources.
++# Feeds adapter queries about included documents.
++# Related: sphinx/environment/adapters/toctree.py#toctree-adapter, sphinx/environment/__init__.py#sphinx-env, sphinx/transforms/__init__.py#sphinx-transforms
++#
+ """Toctree collector for sphinx.environment."""
+ 
+ from typing import Any, Dict, List, Optional, Set, Tuple, Type, TypeVar, cast
+diff --git a/sphinx/events.py b/sphinx/events.py
+index 448af0695..f13d683ca 100644
+--- a/sphinx/events.py
++++ b/sphinx/events.py
+@@ -1,3 +1,8 @@
++# @agents(sphinx-events)
++# Sphinx event bus for build phases (builder-inited, env-updated, etc.).
++# Adapters and collectors subscribe here.
++# Related: sphinx/application.py#sphinx-app, sphinx/environment/__init__.py#sphinx-env
++#
+ """Sphinx core events.
+ 
+ Gracefully adapted from the TextPress system by Armin.
+diff --git a/sphinx/io.py b/sphinx/io.py
+index 26469a018..3d3745c6a 100644
+--- a/sphinx/io.py
++++ b/sphinx/io.py
+@@ -1,3 +1,8 @@
++# @agents(sphinx-io)
++# Sphinx I/O layer bridging docutils readers/parsers and sources.
++# Feeds environment read phase.
++# Related: sphinx/environment/__init__.py#sphinx-env, sphinx/application.py#sphinx-app
++#
+ """Input/Output files"""
+ import codecs
+ import warnings
+diff --git a/sphinx/registry.py b/sphinx/registry.py
+index 050124d0f..0fbe1cc3a 100644
+--- a/sphinx/registry.py
++++ b/sphinx/registry.py
+@@ -1,3 +1,8 @@
++# @agents(sphinx-registry)
++# Component registry for directives, roles, and builder mappings.
++# Application populates during initialization.
++# Related: sphinx/application.py#sphinx-app, sphinx/directives/__init__.py#sphinx-directives-pkg
++#
+ """Sphinx component registry."""
+ 
+ import traceback
+diff --git a/sphinx/transforms/__init__.py b/sphinx/transforms/__init__.py
+index 501b528f0..c2125e5a0 100644
+--- a/sphinx/transforms/__init__.py
++++ b/sphinx/transforms/__init__.py
+@@ -1,3 +1,8 @@
++# @agents(sphinx-transforms)
++# Transform base classes applied post-parse across documents.
++# Toctree collector runs in transform phases.
++# Related: sphinx/environment/collectors/toctree.py#toctree-collector, sphinx/environment/__init__.py#sphinx-env
++#
+ """Docutils transforms used by Sphinx when reading documents."""
+ 
+ import re
+diff --git a/sphinx/util/docutils.py b/sphinx/util/docutils.py
+index cde09058e..a2e87fa36 100644
+--- a/sphinx/util/docutils.py
++++ b/sphinx/util/docutils.py
+@@ -1,3 +1,8 @@
++# @agents(sphinx-docutils-utils)
++# Docutils configuration and Sphinx-specific Reporter wiring.
++# Directives use these when constructing content.
++# Related: sphinx/directives/other.py#sphinx-directives-other, sphinx/application.py#sphinx-app
++#
+ """Utility functions for docutils."""
+ 
+ import os
+diff --git a/sphinx/util/nodes.py b/sphinx/util/nodes.py
+index 0646b44e6..3c0a9a3ab 100644
+--- a/sphinx/util/nodes.py
++++ b/sphinx/util/nodes.py
+@@ -1,3 +1,8 @@
++# @agents(sphinx-util-nodes)
++# Node traversal and filtering utilities for docutils trees.
++# Toctree adapter walks these helpers.
++# Related: sphinx/addnodes.py#sphinx-addnodes, sphinx/environment/adapters/toctree.py#toctree-adapter
++#
+ """Docutils node-related utility functions for Sphinx."""
+ 
+ import re
+diff --git a/sphinx/util/osutil.py b/sphinx/util/osutil.py
+index bfc80adcf..ae33cec20 100644
+--- a/sphinx/util/osutil.py
++++ b/sphinx/util/osutil.py
+@@ -1,3 +1,8 @@
++# @agents(sphinx-osutil)
++# Filesystem helpers: relpath, copy times, and path normalization.
++# Environment and builders share these.
++# Related: sphinx/environment/__init__.py#sphinx-env, sphinx/application.py#sphinx-app
++#
+ """Operating system-related utility functions for Sphinx."""
+ 
+ import contextlib

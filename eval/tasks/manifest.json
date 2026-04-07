@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "description": "Eval task registry. Cohorts name subsets for batch runs; tasks.* tracks onboarding state and tag_quality.",
+  "cohorts": {
+    "initial": [
+      "django__django-13195",
+      "pylint-dev__pylint-6528",
+      "astropy__astropy-13398",
+      "django__django-11138",
+      "matplotlib__matplotlib-14623",
+      "sphinx-doc__sphinx-10673",
+      "pydata__xarray-3993",
+      "pytest-dev__pytest-5840",
+      "scikit-learn__scikit-learn-12682",
+      "sympy__sympy-14248"
+    ]
+  },
+  "tasks": {
+    "django__django-13195": {
+      "status": "fixture-authored",
+      "tag_quality": "reviewed",
+      "cohorts": ["initial"],
+      "notes": "Original eval task; cookie/messages subsystem tags."
+    },
+    "pylint-dev__pylint-6528": {
+      "status": "fixture-authored",
+      "tag_quality": "reviewed",
+      "cohorts": ["initial"],
+      "notes": "Original eval task; pylint lint package tags."
+    },
+    "astropy__astropy-13398": {
+      "status": "fixture-authored",
+      "tag_quality": "reviewed",
+      "cohorts": ["initial"],
+      "notes": "ITRS / coordinate transforms; one GT file is added in gold patch only — not tagged at base."
+    },
+    "django__django-11138": {
+      "status": "fixture-authored",
+      "tag_quality": "reviewed",
+      "cohorts": ["initial"],
+      "notes": "DB backend timezone / SQLite / MySQL / Oracle operations."
+    },
+    "matplotlib__matplotlib-14623": {
+      "status": "fixture-authored",
+      "tag_quality": "reviewed",
+      "cohorts": ["initial"],
+      "notes": "Axis limits and log scale; axes_base, ticker, mplot3d."
+    },
+    "sphinx-doc__sphinx-10673": {
+      "status": "fixture-authored",
+      "tag_quality": "reviewed",
+      "cohorts": ["initial"],
+      "notes": "Toctree / environment adapters."
+    },
+    "pydata__xarray-3993": {
+      "status": "fixture-authored",
+      "tag_quality": "reviewed",
+      "cohorts": ["initial"],
+      "notes": "DataArray vs Dataset integrate API consistency."
+    },
+    "pytest-dev__pytest-5840": {
+      "status": "fixture-authored",
+      "tag_quality": "reviewed",
+      "cohorts": ["initial"],
+      "notes": "Config and pathlib import / conftest loading."
+    },
+    "scikit-learn__scikit-learn-12682": {
+      "status": "fixture-authored",
+      "tag_quality": "reviewed",
+      "cohorts": ["initial"],
+      "notes": "SparseCoder / dict_learning; includes example script in patch."
+    },
+    "sympy__sympy-14248": {
+      "status": "fixture-authored",
+      "tag_quality": "reviewed",
+      "cohorts": ["initial"],
+      "notes": "Printing: latex, pretty, str."
+    }
+  }
+}

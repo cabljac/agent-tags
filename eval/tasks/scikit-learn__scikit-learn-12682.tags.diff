@@ -1,0 +1,218 @@
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+index 0000000000..cffc9551ac
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,17 @@
++# Agent Context
++
++This codebase uses `@agents` tags — structured comments in source files that describe what each file does and how it relates to others.
++
++Decomposition estimators live under `sklearn/decomposition/`; `dict_learning.py` implements sparse coding pieces used by SparseCoder.|Examples under `examples/` only demonstrate API.
++
++## Reading tags
++
++Look for `@agents(name)` in the first few lines of source files.
++
++- **Body**: what the file does
++- **Related**: repo-root-relative paths. `#name` fragments point to named headers.
++- **Warnings**: `Don't`, `Warning:`, `Note:`, or `Avoid:`
++
++## Before editing
++
++Read headers and follow `Related:` to see coordination points across scikit-learn.
+diff --git a/examples/decomposition/plot_sparse_coding.py b/examples/decomposition/plot_sparse_coding.py
+index 528817ad0c..4ce70e281d 100644
+--- a/examples/decomposition/plot_sparse_coding.py
++++ b/examples/decomposition/plot_sparse_coding.py
+@@ -1,3 +1,8 @@
++# @agents(example-sparse-coding)
++# Example script plotting sparse coding with SparseCoder.
++# Not imported by library code; illustrates public API only.
++# Related: sklearn/decomposition/dict_learning.py#dict-learning, sklearn/decomposition/__init__.py#sklearn-decomp-init
++#
+ """
+ ===========================================
+ Sparse coding with a precomputed dictionary
+diff --git a/sklearn/__init__.py b/sklearn/__init__.py
+index 4f8c5d6d78..6093f043d8 100644
+--- a/sklearn/__init__.py
++++ b/sklearn/__init__.py
+@@ -1,3 +1,8 @@
++# @agents(sklearn-init)
++# Package bootstrap and lazy submodule warnings.
++# Decomposition lives under sklearn.decomposition.
++# Related: sklearn/base.py#sklearn-base, sklearn/decomposition/__init__.py#sklearn-decomp-init
++#
+ """
+ Machine learning module for Python
+ ==================================
+diff --git a/sklearn/base.py b/sklearn/base.py
+index fb0818efc8..224b935e33 100644
+--- a/sklearn/base.py
++++ b/sklearn/base.py
+@@ -1,3 +1,8 @@
++# @agents(sklearn-base)
++# BaseEstimator, TransformerMixin, and clone() core patterns.
++# All estimators inherit mixins from here.
++# Related: sklearn/utils/__init__.py#sklearn-utils, sklearn/utils/validation.py#sklearn-validation
++#
+ """Base classes for all estimators."""
+ 
+ # Author: Gael Varoquaux <gael.varoquaux@normalesup.org>
+diff --git a/sklearn/decomposition/__init__.py b/sklearn/decomposition/__init__.py
+index 34ad76ca46..0e728dba4c 100644
+--- a/sklearn/decomposition/__init__.py
++++ b/sklearn/decomposition/__init__.py
+@@ -1,3 +1,8 @@
++# @agents(sklearn-decomp-init)
++# Re-exports decomposition estimators for sklearn.decomposition namespace.
++# dict_learning registers key classes.
++# Related: sklearn/decomposition/dict_learning.py#dict-learning, sklearn/decomposition/base.py#sklearn-decomp-base
++#
+ """
+ The :mod:`sklearn.decomposition` module includes matrix decomposition
+ algorithms, including among others PCA, NMF or ICA. Most of the algorithms of
+diff --git a/sklearn/decomposition/base.py b/sklearn/decomposition/base.py
+index 3cbdb29723..b34aa36043 100644
+--- a/sklearn/decomposition/base.py
++++ b/sklearn/decomposition/base.py
+@@ -1,3 +1,8 @@
++# @agents(sklearn-decomp-base)
++# Base class for PCA-like transformers with mean centering hooks.
++# Inherited by dict learning variants.
++# Related: sklearn/base.py#sklearn-base, sklearn/utils/validation.py#sklearn-validation
++#
+ """Principal Component Analysis Base Classes"""
+ 
+ # Author: Alexandre Gramfort <alexandre.gramfort@inria.fr>
+diff --git a/sklearn/decomposition/dict_learning.py b/sklearn/decomposition/dict_learning.py
+index a318c957fe..6919ff9021 100644
+--- a/sklearn/decomposition/dict_learning.py
++++ b/sklearn/decomposition/dict_learning.py
+@@ -1,3 +1,8 @@
++# @agents(dict-learning)
++# Dictionary learning and sparse coding solvers (BatchDictionaryLearning, SparseCoder, etc.).
++# Uses decomposition base and linear model utilities.
++# Related: sklearn/decomposition/base.py#sklearn-decomp-base, sklearn/base.py#sklearn-base, sklearn/utils/__init__.py#sklearn-utils
++#
+ """ Dictionary learning
+ """
+ # Author: Vlad Niculae, Gael Varoquaux, Alexandre Gramfort
+diff --git a/sklearn/decomposition/nmf.py b/sklearn/decomposition/nmf.py
+index ae624e2a1b..241329cc30 100644
+--- a/sklearn/decomposition/nmf.py
++++ b/sklearn/decomposition/nmf.py
+@@ -1,3 +1,8 @@
++# @agents(sklearn-nmf)
++# Non-negative matrix factorization solvers.
++# Shares extmath and validation utilities with dict_learning.
++# Related: sklearn/decomposition/base.py#sklearn-decomp-base, sklearn/utils/extmath.py#sklearn-extmath
++#
+ """ Non-negative matrix factorization
+ """
+ # Author: Vlad Niculae
+diff --git a/sklearn/decomposition/pca.py b/sklearn/decomposition/pca.py
+index ccde667d0d..d020f33e16 100644
+--- a/sklearn/decomposition/pca.py
++++ b/sklearn/decomposition/pca.py
+@@ -1,3 +1,8 @@
++# @agents(sklearn-pca)
++# Principal component analysis implementation alongside other factorizations.
++# Shares patterns with dict_learning batch code.
++# Related: sklearn/decomposition/base.py#sklearn-decomp-base, sklearn/decomposition/__init__.py#sklearn-decomp-init
++#
+ """ Principal Component Analysis
+ """
+ 
+diff --git a/sklearn/decomposition/sparse_pca.py b/sklearn/decomposition/sparse_pca.py
+index 238f6cc4ef..a0e7dbdb7a 100644
+--- a/sklearn/decomposition/sparse_pca.py
++++ b/sklearn/decomposition/sparse_pca.py
+@@ -1,3 +1,8 @@
++# @agents(sklearn-sparse-pca)
++# Sparse PCA variant using L1 penalties.
++# Algorithmically adjacent to dictionary learning.
++# Related: sklearn/decomposition/dict_learning.py#dict-learning, sklearn/decomposition/base.py#sklearn-decomp-base
++#
+ """Matrix factorization with Sparse PCA"""
+ # Author: Vlad Niculae, Gael Varoquaux, Alexandre Gramfort
+ # License: BSD 3 clause
+diff --git a/sklearn/exceptions.py b/sklearn/exceptions.py
+index 3480e3caaa..9930763b0b 100644
+--- a/sklearn/exceptions.py
++++ b/sklearn/exceptions.py
+@@ -1,3 +1,8 @@
++# @agents(sklearn-exceptions)
++# Estimator-specific exceptions (NotFittedError, ConvergenceWarning).
++# Fit/transform paths raise these consistently.
++# Related: sklearn/base.py#sklearn-base, sklearn/decomposition/dict_learning.py#dict-learning
++#
+ """
+ The :mod:`sklearn.exceptions` module includes all custom warnings and error
+ classes used across scikit-learn.
+diff --git a/sklearn/linear_model/base.py b/sklearn/linear_model/base.py
+index 79be362d9b..cb7ec3433a 100644
+--- a/sklearn/linear_model/base.py
++++ b/sklearn/linear_model/base.py
+@@ -1,3 +1,8 @@
++# @agents(sklearn-linear-base)
++# Linear model base with coordinate descent hooks shared across solvers.
++# Sparse coding overlaps algorithmically.
++# Related: sklearn/base.py#sklearn-base, sklearn/utils/validation.py#sklearn-validation
++#
+ """
+ Generalized Linear models.
+ """
+diff --git a/sklearn/utils/__init__.py b/sklearn/utils/__init__.py
+index daf7e77632..27cafe1dc0 100644
+--- a/sklearn/utils/__init__.py
++++ b/sklearn/utils/__init__.py
+@@ -1,3 +1,8 @@
++# @agents(sklearn-utils)
++# Utility re-exports: validation, extmath, sparse helpers.
++# Widely imported across decomposition modules.
++# Related: sklearn/utils/validation.py#sklearn-validation, sklearn/utils/extmath.py#sklearn-extmath
++#
+ """
+ The :mod:`sklearn.utils` module includes various utilities.
+ """
+diff --git a/sklearn/utils/extmath.py b/sklearn/utils/extmath.py
+index fcb03b0cec..6de68047c6 100644
+--- a/sklearn/utils/extmath.py
++++ b/sklearn/utils/extmath.py
+@@ -1,3 +1,8 @@
++# @agents(sklearn-extmath)
++# Fast randomized linear algebra helpers (randomized SVD, norms).
++# Dictionary learning may call into these kernels.
++# Related: sklearn/utils/__init__.py#sklearn-utils, sklearn/decomposition/dict_learning.py#dict-learning
++#
+ """
+ Extended math utilities.
+ """
+diff --git a/sklearn/utils/fixes.py b/sklearn/utils/fixes.py
+index 2481eb39c9..2f92f62e13 100644
+--- a/sklearn/utils/fixes.py
++++ b/sklearn/utils/fixes.py
+@@ -1,3 +1,8 @@
++# @agents(sklearn-fixes)
++# Version compatibility shims for numpy/scipy APIs.
++# Low-level deps for extmath and decomposition.
++# Related: sklearn/utils/extmath.py#sklearn-extmath, sklearn/utils/__init__.py#sklearn-utils
++#
+ """Compatibility fixes for older version of python, numpy and scipy
+ 
+ If you add content to this file, please give the version of the package
+diff --git a/sklearn/utils/validation.py b/sklearn/utils/validation.py
+index bb6cf1c8ff..eec912f066 100644
+--- a/sklearn/utils/validation.py
++++ b/sklearn/utils/validation.py
+@@ -1,3 +1,8 @@
++# @agents(sklearn-validation)
++# check_array, check_X_y, and dtype acceptance rules.
++# dict_learning uses these at fit time.
++# Related: sklearn/utils/__init__.py#sklearn-utils, sklearn/base.py#sklearn-base
++#
+ """Utilities for input validation"""
+ 
+ # Authors: Olivier Grisel

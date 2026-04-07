@@ -1,0 +1,231 @@
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+index 000000000..9c1816fa8
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,17 @@
++# Agent Context
++
++This codebase uses `@agents` tags — structured comments in source files that describe what each file does and how it relates to others.
++
++Pytest lives under `src/_pytest/`; configuration is split across `config/` and runtime collection uses `pathlib`, `main`, and `python` modules.
++
++## Reading tags
++
++Look for `@agents(name)` in the first few lines of source files.
++
++- **Body**: what the file does
++- **Related**: repo-root-relative paths. `#name` fragments point to named headers.
++- **Warnings**: `Don't`, `Warning:`, `Note:`, or `Avoid:`
++
++## Before editing
++
++Read headers and follow `Related:` to see coordination points across pytest.
+diff --git a/src/_pytest/__init__.py b/src/_pytest/__init__.py
+index 46c7827ed..a883ca397 100644
+--- a/src/_pytest/__init__.py
++++ b/src/_pytest/__init__.py
+@@ -1,3 +1,8 @@
++# @agents(pytest-internal-init)
++# Package marker for pytest implementation modules.
++# Public pytest API is exposed via setuptools entrypoints elsewhere.
++# Related: src/_pytest/main.py#pytest-main, src/_pytest/config/__init__.py#pytest-config
++#
+ __all__ = ["__version__"]
+ 
+ try:
+diff --git a/src/_pytest/_code/code.py b/src/_pytest/_code/code.py
+index a0f4d15ce..51adcf3a9 100644
+--- a/src/_pytest/_code/code.py
++++ b/src/_pytest/_code/code.py
+@@ -1,3 +1,8 @@
++# @agents(pytest-code)
++# Code and frame introspection for tracebacks and assertion rewriting.
++# Supports terminal and debugging plugins.
++# Related: src/_pytest/runner.py#pytest-runner, src/_pytest/terminal.py#pytest-terminal
++#
+ import inspect
+ import re
+ import sys
+diff --git a/src/_pytest/capture.py b/src/_pytest/capture.py
+index e4e58b32c..d0781d9ef 100644
+--- a/src/_pytest/capture.py
++++ b/src/_pytest/capture.py
+@@ -1,3 +1,8 @@
++# @agents(pytest-capture)
++# Stdin/stdout/stderr capture during tests.
++# Used by runner for failure output.
++# Related: src/_pytest/runner.py#pytest-runner, src/_pytest/terminal.py#pytest-terminal
++#
+ """
+ per-test stdout/stderr capturing mechanism.
+ 
+diff --git a/src/_pytest/compat.py b/src/_pytest/compat.py
+index 3d1531e77..97b7e0502 100644
+--- a/src/_pytest/compat.py
++++ b/src/_pytest/compat.py
+@@ -1,3 +1,8 @@
++# @agents(pytest-compat)
++# Version shims for Python and legacy pytest APIs.
++# Imported widely across collection code.
++# Related: src/_pytest/pathlib.py#pytest-pathlib, src/_pytest/python.py#pytest-python
++#
+ """
+ python version compatibility code
+ """
+diff --git a/src/_pytest/config/__init__.py b/src/_pytest/config/__init__.py
+index 3a0eca546..47be583b9 100644
+--- a/src/_pytest/config/__init__.py
++++ b/src/_pytest/config/__init__.py
+@@ -1,3 +1,8 @@
++# @agents(pytest-config)
++# Config container, plugin registration, and session-scoped option values.
++# Entry point used by _pytest.main after CLI parsing.
++# Related: src/_pytest/config/argparsing.py#config-argparse, src/_pytest/config/findpaths.py#config-findpaths, src/_pytest/main.py#pytest-main, src/_pytest/pathlib.py#pytest-pathlib
++#
+ """ command line options, ini-file and conftest.py processing. """
+ import argparse
+ import copy
+diff --git a/src/_pytest/config/argparsing.py b/src/_pytest/config/argparsing.py
+index 8994ff7d9..fb4a0881a 100644
+--- a/src/_pytest/config/argparsing.py
++++ b/src/_pytest/config/argparsing.py
+@@ -1,3 +1,8 @@
++# @agents(config-argparse)
++# Parses CLI args into argparse.Namespace and builds initial Config.
++# Feeds findpaths and plugin loading.
++# Related: src/_pytest/config/__init__.py#pytest-config, src/_pytest/config/findpaths.py#config-findpaths, src/_pytest/helpconfig.py#pytest-helpconfig
++#
+ import argparse
+ import sys
+ import warnings
+diff --git a/src/_pytest/config/findpaths.py b/src/_pytest/config/findpaths.py
+index ec991316a..419115f6a 100644
+--- a/src/_pytest/config/findpaths.py
++++ b/src/_pytest/config/findpaths.py
+@@ -1,3 +1,8 @@
++# @agents(config-findpaths)
++# Discovers `conftest.py` and test paths from args and filesystem layout.
++# Uses pathlib helpers for importable path resolution.
++# Related: src/_pytest/pathlib.py#pytest-pathlib, src/_pytest/config/__init__.py#pytest-config, src/_pytest/main.py#pytest-main
++#
+ import os
+ 
+ import py
+diff --git a/src/_pytest/fixtures.py b/src/_pytest/fixtures.py
+index e78ed011e..798a7864d 100644
+--- a/src/_pytest/fixtures.py
++++ b/src/_pytest/fixtures.py
+@@ -1,3 +1,8 @@
++# @agents(pytest-fixtures)
++# Fixture definition, dependency resolution, and scoping.
++# Integrates with python item setup.
++# Related: src/_pytest/python.py#pytest-python, src/_pytest/nodes.py#pytest-nodes, src/_pytest/runner.py#pytest-runner
++#
+ import functools
+ import inspect
+ import itertools
+diff --git a/src/_pytest/helpconfig.py b/src/_pytest/helpconfig.py
+index 50acc2d7d..628cd8928 100644
+--- a/src/_pytest/helpconfig.py
++++ b/src/_pytest/helpconfig.py
+@@ -1,3 +1,8 @@
++# @agents(pytest-helpconfig)
++# Help and version printing paths for CLI.
++# Uses same argparse objects as config-argparse.
++# Related: src/_pytest/config/argparsing.py#config-argparse, src/_pytest/config/__init__.py#pytest-config
++#
+ """ version info, help messages, tracing configuration.  """
+ import os
+ import sys
+diff --git a/src/_pytest/hookspec.py b/src/_pytest/hookspec.py
+index 59fc569f4..00d713cf6 100644
+--- a/src/_pytest/hookspec.py
++++ b/src/_pytest/hookspec.py
+@@ -1,3 +1,8 @@
++# @agents(pytest-hookspec)
++# Declarative hook specifications plugins implement.
++# Config wires hook callers across the session.
++# Related: src/_pytest/config/__init__.py#pytest-config, src/_pytest/main.py#pytest-main, src/_pytest/terminal.py#pytest-terminal
++#
+ """ hook specifications for pytest plugins, invoked from main.py and builtin plugins.  """
+ from pluggy import HookspecMarker
+ 
+diff --git a/src/_pytest/main.py b/src/_pytest/main.py
+index 23eff52dd..8e2450a3c 100644
+--- a/src/_pytest/main.py
++++ b/src/_pytest/main.py
+@@ -1,3 +1,8 @@
++# @agents(pytest-main)
++# Session lifecycle: create Config, perform collection, run test items.
++# Hosts Session collector and interacts with runner and terminal.
++# Related: src/_pytest/config/__init__.py#pytest-config, src/_pytest/python.py#pytest-python, src/_pytest/runner.py#pytest-runner, src/_pytest/nodes.py#pytest-nodes
++#
+ """ core implementation of testing process: init, session, runtest loop. """
+ import enum
+ import fnmatch
+diff --git a/src/_pytest/nodes.py b/src/_pytest/nodes.py
+index 9b78dca38..f43d05740 100644
+--- a/src/_pytest/nodes.py
++++ b/src/_pytest/nodes.py
+@@ -1,3 +1,8 @@
++# @agents(pytest-nodes)
++# Collector and Item base classes forming the session tree.
++# FSCollector ties filesystem nodes to paths.
++# Related: src/_pytest/main.py#pytest-main, src/_pytest/python.py#pytest-python, src/_pytest/runner.py#pytest-runner
++#
+ import os
+ import warnings
+ from functools import lru_cache
+diff --git a/src/_pytest/pathlib.py b/src/_pytest/pathlib.py
+index 0403b6947..f5354b9f5 100644
+--- a/src/_pytest/pathlib.py
++++ b/src/_pytest/pathlib.py
+@@ -1,3 +1,8 @@
++# @agents(pytest-pathlib)
++# Filesystem and importlib helpers for turning paths into modules.
++# Shared by collection, config discovery, and tmpdir.
++# Related: src/_pytest/config/findpaths.py#config-findpaths, src/_pytest/python.py#pytest-python, src/_pytest/main.py#pytest-main
++#
+ import atexit
+ import fnmatch
+ import itertools
+diff --git a/src/_pytest/python.py b/src/_pytest/python.py
+index 913a93bc0..6a9625400 100644
+--- a/src/_pytest/python.py
++++ b/src/_pytest/python.py
+@@ -1,3 +1,8 @@
++# @agents(pytest-python)
++# Python test collection: Module, Function items, fixtures integration.
++# Imports use pathlib-backed module loading.
++# Related: src/_pytest/pathlib.py#pytest-pathlib, src/_pytest/main.py#pytest-main, src/_pytest/nodes.py#pytest-nodes, src/_pytest/fixtures.py#pytest-fixtures
++#
+ """ Python test discovery, setup and run of test functions. """
+ import enum
+ import fnmatch
+diff --git a/src/_pytest/runner.py b/src/_pytest/runner.py
+index 8aae163c3..46b827ddf 100644
+--- a/src/_pytest/runner.py
++++ b/src/_pytest/runner.py
+@@ -1,3 +1,8 @@
++# @agents(pytest-runner)
++# Runs setup/call/teardown for each test item and records outcomes.
++# Coordinates with capture and fixtures.
++# Related: src/_pytest/main.py#pytest-main, src/_pytest/python.py#pytest-python, src/_pytest/capture.py#pytest-capture
++#
+ """ basic collect and runtest protocol implementations """
+ import bdb
+ import os
+diff --git a/src/_pytest/terminal.py b/src/_pytest/terminal.py
+index 0d9794159..6a34e0efd 100644
+--- a/src/_pytest/terminal.py
++++ b/src/_pytest/terminal.py
+@@ -1,3 +1,8 @@
++# @agents(pytest-terminal)
++# Console reporting: progress, failures, and summary lines.
++# Consumes hook outcomes from runner and reports.
++# Related: src/_pytest/hookspec.py#pytest-hookspec, src/_pytest/main.py#pytest-main, src/_pytest/runner.py#pytest-runner
++#
+ """ terminal reporting of the full testing process.
+ 
+ This is a good source for looking at the various reporting hooks.

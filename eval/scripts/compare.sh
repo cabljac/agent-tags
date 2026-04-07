@@ -22,3 +22,5 @@ for condition in baseline with-tags; do
   done
   echo ""
 done
+
+echo "result: RESOLVED | FAILED | PATCH_APPLY_FAILED | NOT_RUN (evaluate.sh not run yet)"

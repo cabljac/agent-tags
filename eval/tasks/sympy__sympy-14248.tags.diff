@@ -1,0 +1,231 @@
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+index 0000000000..6f4985a6f5
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,17 @@
++# Agent Context
++
++This codebase uses `@agents` tags — structured comments in source files that describe what each file does and how it relates to others.
++
++Printing stack: `sympy/printing/printer.py` dispatches; `latex`, `str`, and `pretty` backends share `conventions` and `precedence`.
++
++## Reading tags
++
++Look for `@agents(name)` in the first few lines of source files.
++
++- **Body**: what the file does
++- **Related**: repo-root-relative paths. `#name` fragments point to named headers.
++- **Warnings**: `Don't`, `Warning:`, `Note:`, or `Avoid:`
++
++## Before editing
++
++Read headers and follow `Related:` to see coordination points across SymPy.
+diff --git a/sympy/core/basic.py b/sympy/core/basic.py
+index bdfebf24cc..49dca923c8 100644
+--- a/sympy/core/basic.py
++++ b/sympy/core/basic.py
+@@ -1,3 +1,8 @@
++# @agents(core-basic)
++# Base class for SymPy objects: args, substitution, and traversal.
++# Printers recurse through Basic.args.
++# Related: sympy/core/expr.py#core-expr, sympy/printing/printer.py#printer-base
++#
+ """Base class for all the objects in SymPy"""
+ from __future__ import print_function, division
+ from collections import Mapping, defaultdict
+diff --git a/sympy/core/expr.py b/sympy/core/expr.py
+index 421e6cd8e6..c1ec8aab9c 100644
+--- a/sympy/core/expr.py
++++ b/sympy/core/expr.py
+@@ -1,3 +1,8 @@
++# @agents(core-expr)
++# Expr algebraic operations layer above Basic.
++# Printing methods often special-case Expr subclasses.
++# Related: sympy/core/basic.py#core-basic, sympy/printing/str.py#printing-str
++#
+ from __future__ import print_function, division
+ 
+ from .sympify import sympify, _sympify, SympifyError
+diff --git a/sympy/printing/__init__.py b/sympy/printing/__init__.py
+index a4d7f96306..7e6ae436a3 100644
+--- a/sympy/printing/__init__.py
++++ b/sympy/printing/__init__.py
+@@ -1,3 +1,8 @@
++# @agents(printing-init)
++# Re-exports printers and registers default printing methods.
++# Consumers pick strrepr vs pretty vs latex.
++# Related: sympy/printing/printer.py#printer-base, sympy/printing/latex.py#printing-latex, sympy/printing/str.py#printing-str
++#
+ """Printing subsystem"""
+ 
+ from .pretty import pager_print, pretty, pretty_print, pprint, \
+diff --git a/sympy/printing/codeprinter.py b/sympy/printing/codeprinter.py
+index 89677d1be6..9f1d51865a 100644
+--- a/sympy/printing/codeprinter.py
++++ b/sympy/printing/codeprinter.py
+@@ -1,3 +1,8 @@
++# @agents(codeprinter)
++# Base for C/Fortran/Python code generation printers.
++# Separate from interactive str/latex backends.
++# Related: sympy/printing/printer.py#printer-base, sympy/printing/conventions.py#printing-conventions
++#
+ from __future__ import print_function, division
+ 
+ from functools import wraps
+diff --git a/sympy/printing/conventions.py b/sympy/printing/conventions.py
+index f74468290c..12e51b26ba 100644
+--- a/sympy/printing/conventions.py
++++ b/sympy/printing/conventions.py
+@@ -1,3 +1,8 @@
++# @agents(printing-conventions)
++# Shared naming and split_super_sub helpers across printers.
++# Avoid duplicating split logic in latex/str/pretty.
++# Related: sympy/printing/latex.py#printing-latex, sympy/printing/str.py#printing-str
++#
+ """
+ A few practical conventions common to all printers.
+ """
+diff --git a/sympy/printing/defaults.py b/sympy/printing/defaults.py
+index 76877a66f5..fbfc730643 100644
+--- a/sympy/printing/defaults.py
++++ b/sympy/printing/defaults.py
+@@ -1,3 +1,8 @@
++# @agents(printing-defaults)
++# Default printer method registrations and fallback printing.
++# Printer consults these before raising NotImplemented.
++# Related: sympy/printing/printer.py#printer-base, sympy/printing/str.py#printing-str
++#
+ from __future__ import print_function, division
+ 
+ class DefaultPrinting(object):
+diff --git a/sympy/printing/latex.py b/sympy/printing/latex.py
+index 8253b2f682..82af82fea8 100644
+--- a/sympy/printing/latex.py
++++ b/sympy/printing/latex.py
+@@ -1,3 +1,8 @@
++# @agents(printing-latex)
++# LaTeX output for Expr trees; uses precedence and function bracing rules.
++# Delegates unknown types to Printer.
++# Related: sympy/printing/printer.py#printer-base, sympy/printing/conventions.py#printing-conventions, sympy/printing/precedence.py#printing-precedence
++#
+ """
+ A Printer which converts an expression into its LaTeX equivalent.
+ """
+diff --git a/sympy/printing/precedence.py b/sympy/printing/precedence.py
+index 2d65b08d80..23757192a8 100644
+--- a/sympy/printing/precedence.py
++++ b/sympy/printing/precedence.py
+@@ -1,3 +1,8 @@
++# @agents(printing-precedence)
++# Operator precedence tables and PRECEDENCE values.
++# Parenthesization decisions flow from here.
++# Related: sympy/printing/latex.py#printing-latex, sympy/printing/str.py#printing-str, sympy/printing/pretty/pretty.py#pretty-printer
++#
+ """A module providing information about the necessity of brackets"""
+ 
+ from __future__ import print_function, division
+diff --git a/sympy/printing/pretty/pretty.py b/sympy/printing/pretty/pretty.py
+index db24f4c612..a85cf67d8a 100644
+--- a/sympy/printing/pretty/pretty.py
++++ b/sympy/printing/pretty/pretty.py
+@@ -1,3 +1,8 @@
++# @agents(pretty-printer)
++# ASCII/Unicode pretty printer implementation.
++# Builds layout via stringpict helpers.
++# Related: sympy/printing/printer.py#printer-base, sympy/printing/pretty/stringpict.py#stringpict, sympy/printing/pretty/pretty_symbology.py#pretty-symbology
++#
+ from __future__ import print_function, division
+ 
+ import itertools
+diff --git a/sympy/printing/pretty/pretty_symbology.py b/sympy/printing/pretty/pretty_symbology.py
+index 6151b40bab..f8c375b4bb 100644
+--- a/sympy/printing/pretty/pretty_symbology.py
++++ b/sympy/printing/pretty/pretty_symbology.py
+@@ -1,3 +1,8 @@
++# @agents(pretty-symbology)
++# Glyph tables and symbol rendering choices for pretty printer.
++# Keeps math notation consistent across Expr types.
++# Related: sympy/printing/pretty/pretty.py#pretty-printer, sympy/printing/pretty/stringpict.py#stringpict
++#
+ """Symbolic primitives + unicode/ASCII abstraction for pretty.py"""
+ 
+ from __future__ import print_function, division
+diff --git a/sympy/printing/pretty/stringpict.py b/sympy/printing/pretty/stringpict.py
+index 82073c1284..eb678775fc 100644
+--- a/sympy/printing/pretty/stringpict.py
++++ b/sympy/printing/pretty/stringpict.py
+@@ -1,3 +1,8 @@
++# @agents(stringpict)
++# Low-level box drawing and horizontal/vertical composition for pretty output.
++# Used exclusively by pretty printer.
++# Related: sympy/printing/pretty/pretty.py#pretty-printer, sympy/printing/pretty/pretty_symbology.py#pretty-symbology
++#
+ """Prettyprinter by Jurjen Bos.
+ (I hate spammers: mail me at pietjepuk314 at the reverse of ku.oc.oohay).
+ All objects have a method that create a "stringPict",
+diff --git a/sympy/printing/printer.py b/sympy/printing/printer.py
+index 93578d0950..b324018d19 100644
+--- a/sympy/printing/printer.py
++++ b/sympy/printing/printer.py
+@@ -1,3 +1,8 @@
++# @agents(printer-base)
++# Generic dispatch mechanism selecting printer methods per expression type.
++# All concrete printers subclass Printer.
++# Related: sympy/printing/defaults.py#printing-defaults, sympy/printing/conventions.py#printing-conventions, sympy/printing/precedence.py#printing-precedence
++#
+ """Printing subsystem driver
+ 
+ SymPy's printing system works the following way: Any expression can be
+diff --git a/sympy/printing/pycode.py b/sympy/printing/pycode.py
+index 7830ebbde2..e815771e38 100644
+--- a/sympy/printing/pycode.py
++++ b/sympy/printing/pycode.py
+@@ -1,3 +1,8 @@
++# @agents(printing-pycode)
++# Python code emission for lambdify-style backends.
++# Shares CodePrinter patterns.
++# Related: sympy/printing/codeprinter.py#codeprinter, sympy/printing/printer.py#printer-base
++#
+ from collections import defaultdict
+ from functools import wraps
+ from itertools import chain
+diff --git a/sympy/printing/repr.py b/sympy/printing/repr.py
+index e98d83aba3..9e8621d3d6 100644
+--- a/sympy/printing/repr.py
++++ b/sympy/printing/repr.py
+@@ -1,3 +1,8 @@
++# @agents(printing-repr)
++# ReprPrinter for debug-oriented srepr output.
++# Uses Printer dispatch like strprinter.
++# Related: sympy/printing/printer.py#printer-base, sympy/printing/defaults.py#printing-defaults
++#
+ """
+ A Printer for generating executable code.
+ 
+diff --git a/sympy/printing/str.py b/sympy/printing/str.py
+index 0baefe0f7f..c5c03734a6 100644
+--- a/sympy/printing/str.py
++++ b/sympy/printing/str.py
+@@ -1,3 +1,8 @@
++# @agents(printing-str)
++# Plain string representation for interactive use.
++# Shares precedence tables with latex and pretty.
++# Related: sympy/printing/printer.py#printer-base, sympy/printing/defaults.py#printing-defaults, sympy/printing/precedence.py#printing-precedence
++#
+ """
+ A Printer for generating readable representation of most sympy classes.
+ """
+diff --git a/sympy/printing/tree.py b/sympy/printing/tree.py
+index 95f34cfdde..ee76e09209 100644
+--- a/sympy/printing/tree.py
++++ b/sympy/printing/tree.py
+@@ -1,3 +1,8 @@
++# @agents(printing-tree)
++# Debug printer showing expression tree structure.
++# Helpful when extending Printer subclasses.
++# Related: sympy/printing/printer.py#printer-base, sympy/core/basic.py#core-basic
++#
+ from __future__ import print_function, division
+ 
+ 

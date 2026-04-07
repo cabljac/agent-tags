@@ -1,0 +1,244 @@
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+index 0000000000..75210aec6f
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,17 @@
++# Agent Context
++
++This codebase uses `@agents` tags — structured comments in source files that describe what each file does and how it relates to others.
++
++Frames and transforms: `astropy/coordinates/builtin_frames/` registers ITRS, CIRS, TETE, and observed transforms.|Note: some frame modules are added in later commits; at this snapshot, follow `Related:` from `__init__.py` and `itrs.py`.
++
++## Reading tags
++
++Look for `@agents(name)` in the first few lines of source files.
++
++- **Body**: what the file does
++- **Related**: repo-root-relative paths. `#name` fragments point to named headers.
++- **Warnings**: `Don't`, `Warning:`, `Note:`, or `Avoid:`
++
++## Before editing
++
++Read headers and follow `Related:` to see coordination points across Astropy coordinates.
+diff --git a/astropy/coordinates/attributes.py b/astropy/coordinates/attributes.py
+index 2749c2d256..3f44dbfc56 100644
+--- a/astropy/coordinates/attributes.py
++++ b/astropy/coordinates/attributes.py
+@@ -1,6 +1,11 @@
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
+ # Dependencies
++# @agents(coord-attrs)
++# Descriptor types for frame attributes (times, locations, differentials).
++# Consumed by BaseCoordinateFrame subclasses.
++# Related: astropy/coordinates/baseframe.py#base-frame, astropy/coordinates/earth.py#earth-loc
++#
+ import numpy as np
+ 
+ # Project
+diff --git a/astropy/coordinates/baseframe.py b/astropy/coordinates/baseframe.py
+index d63e97b151..e509fc4266 100644
+--- a/astropy/coordinates/baseframe.py
++++ b/astropy/coordinates/baseframe.py
+@@ -1,4 +1,9 @@
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
++# @agents(base-frame)
++# BaseCoordinateFrame machinery: representation, differentials, frame attributes.
++# All builtin frames subclass from here.
++# Related: astropy/coordinates/attributes.py#coord-attrs, astropy/coordinates/transformations.py#transforms-graph, astropy/coordinates/builtin_frames/__init__.py#frames-init
++#
+ """
+ Framework and base classes for coordinate frames/"low-level" coordinate
+ classes.
+diff --git a/astropy/coordinates/builtin_frames/__init__.py b/astropy/coordinates/builtin_frames/__init__.py
+index 6fd688c285..e01ef6b9d0 100644
+--- a/astropy/coordinates/builtin_frames/__init__.py
++++ b/astropy/coordinates/builtin_frames/__init__.py
+@@ -1,4 +1,9 @@
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
++# @agents(frames-init)
++# Registers built-in frames and imports transform subgraphs.
++# New frame modules are imported here to hook into the transform graph.
++# Related: astropy/coordinates/builtin_frames/intermediate_rotation_transforms.py#intermediate-rot, astropy/coordinates/builtin_frames/itrs.py#itrs-frame, astropy/coordinates/baseframe.py#base-frame
++#
+ """
+ This package contains the coordinate frames implemented by astropy.
+ 
+diff --git a/astropy/coordinates/builtin_frames/cirs.py b/astropy/coordinates/builtin_frames/cirs.py
+index 9c151ba7db..112588fc3c 100644
+--- a/astropy/coordinates/builtin_frames/cirs.py
++++ b/astropy/coordinates/builtin_frames/cirs.py
+@@ -1,5 +1,10 @@
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
++# @agents(cirs-frame)
++# CIRS frame tied to Earth rotation and observation epochs.
++# Links to intermediate_rotation_transforms.
++# Related: astropy/coordinates/builtin_frames/intermediate_rotation_transforms.py#intermediate-rot, astropy/coordinates/baseframe.py#base-frame
++#
+ from astropy.utils.decorators import format_doc
+ from astropy.coordinates.attributes import (TimeAttribute,
+                                             EarthLocationAttribute)
+diff --git a/astropy/coordinates/builtin_frames/cirs_observed_transforms.py b/astropy/coordinates/builtin_frames/cirs_observed_transforms.py
+index 40e4d3ba91..d657932491 100644
+--- a/astropy/coordinates/builtin_frames/cirs_observed_transforms.py
++++ b/astropy/coordinates/builtin_frames/cirs_observed_transforms.py
+@@ -1,4 +1,9 @@
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
++# @agents(cirs-observed)
++# Transforms between CIRS and AltAz/HADec observed frames.
++# Depends on Earth location attributes.
++# Related: astropy/coordinates/builtin_frames/icrs_observed_transforms.py#icrs-observed, astropy/coordinates/builtin_frames/intermediate_rotation_transforms.py#intermediate-rot, astropy/coordinates/earth.py#earth-loc
++#
+ """
+ Contains the transformation functions for getting to "observed" systems from CIRS.
+ """
+diff --git a/astropy/coordinates/builtin_frames/gcrs.py b/astropy/coordinates/builtin_frames/gcrs.py
+index d0527e5b3a..a942485892 100644
+--- a/astropy/coordinates/builtin_frames/gcrs.py
++++ b/astropy/coordinates/builtin_frames/gcrs.py
+@@ -1,5 +1,10 @@
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
++# @agents(gcrs-frame)
++# Geocentric celestial reference system frame.
++# Connects ICRS and intermediate frames.
++# Related: astropy/coordinates/builtin_frames/intermediate_rotation_transforms.py#intermediate-rot, astropy/coordinates/baseframe.py#base-frame
++#
+ from astropy import units as u
+ from astropy.utils.decorators import format_doc
+ from astropy.coordinates.attributes import (TimeAttribute,
+diff --git a/astropy/coordinates/builtin_frames/hadec.py b/astropy/coordinates/builtin_frames/hadec.py
+index bf64c15836..5c5bdd096f 100644
+--- a/astropy/coordinates/builtin_frames/hadec.py
++++ b/astropy/coordinates/builtin_frames/hadec.py
+@@ -1,5 +1,10 @@
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
++# @agents(hadec-frame)
++# Hour angle / declination observed frame.
++# Hooks into observed and intermediate rotation subgraphs.
++# Related: astropy/coordinates/builtin_frames/intermediate_rotation_transforms.py#intermediate-rot, astropy/coordinates/builtin_frames/cirs_observed_transforms.py#cirs-observed, astropy/coordinates/baseframe.py#base-frame
++#
+ from astropy import units as u
+ from astropy.utils.decorators import format_doc
+ from astropy.coordinates import representation as r
+diff --git a/astropy/coordinates/builtin_frames/icrs.py b/astropy/coordinates/builtin_frames/icrs.py
+index 4863199c7a..9b3bc7ed7f 100644
+--- a/astropy/coordinates/builtin_frames/icrs.py
++++ b/astropy/coordinates/builtin_frames/icrs.py
+@@ -1,5 +1,10 @@
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
++# @agents(icrs-frame)
++# ICRS frame class definition.
++# Entry point for many celestial transforms.
++# Related: astropy/coordinates/baseframe.py#base-frame, astropy/coordinates/builtin_frames/__init__.py#frames-init, astropy/coordinates/transformations.py#transforms-graph
++#
+ from astropy.utils.decorators import format_doc
+ from astropy.coordinates.baseframe import base_doc
+ from .baseradec import BaseRADecFrame, doc_components
+diff --git a/astropy/coordinates/builtin_frames/icrs_observed_transforms.py b/astropy/coordinates/builtin_frames/icrs_observed_transforms.py
+index 128491121d..20d73dd315 100644
+--- a/astropy/coordinates/builtin_frames/icrs_observed_transforms.py
++++ b/astropy/coordinates/builtin_frames/icrs_observed_transforms.py
+@@ -1,4 +1,9 @@
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
++# @agents(icrs-observed)
++# Observed-frame transforms anchored to ICRS-related frames.
++# Coordinates with CIRS observed helpers.
++# Related: astropy/coordinates/builtin_frames/cirs_observed_transforms.py#cirs-observed, astropy/coordinates/builtin_frames/__init__.py#frames-init, astropy/coordinates/transformations.py#transforms-graph
++#
+ """
+ Contains the transformation functions for getting to "observed" systems from ICRS.
+ """
+diff --git a/astropy/coordinates/builtin_frames/intermediate_rotation_transforms.py b/astropy/coordinates/builtin_frames/intermediate_rotation_transforms.py
+index a15248c38d..125caea780 100644
+--- a/astropy/coordinates/builtin_frames/intermediate_rotation_transforms.py
++++ b/astropy/coordinates/builtin_frames/intermediate_rotation_transforms.py
+@@ -1,4 +1,9 @@
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
++# @agents(intermediate-rot)
++# Matrix transforms between intermediate frames (TETE, CIRS, ITRS) and Earth rotation.
++# Uses ERFA helpers and frame attributes.
++# Related: astropy/coordinates/builtin_frames/itrs.py#itrs-frame, astropy/coordinates/builtin_frames/__init__.py#frames-init, astropy/coordinates/transformations.py#transforms-graph
++#
+ """
+ Contains the transformation functions for getting to/from ITRS, TEME, GCRS, and CIRS.
+ These are distinct from the ICRS and AltAz functions because they are just
+diff --git a/astropy/coordinates/builtin_frames/itrs.py b/astropy/coordinates/builtin_frames/itrs.py
+index e121ec9064..5e475dfa6b 100644
+--- a/astropy/coordinates/builtin_frames/itrs.py
++++ b/astropy/coordinates/builtin_frames/itrs.py
+@@ -1,5 +1,10 @@
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
++# @agents(itrs-frame)
++# ITRS frame definition and geocentric/topocentric handling.
++# Transform graph connects to intermediate rotation modules.
++# Related: astropy/coordinates/builtin_frames/intermediate_rotation_transforms.py#intermediate-rot, astropy/coordinates/baseframe.py#base-frame, astropy/coordinates/attributes.py#coord-attrs
++#
+ from astropy.utils.decorators import format_doc
+ from astropy.coordinates.representation import CartesianRepresentation, CartesianDifferential
+ from astropy.coordinates.baseframe import BaseCoordinateFrame, base_doc
+diff --git a/astropy/coordinates/earth.py b/astropy/coordinates/earth.py
+index 06f809d1d6..74c8fcb54c 100644
+--- a/astropy/coordinates/earth.py
++++ b/astropy/coordinates/earth.py
+@@ -1,5 +1,10 @@
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
++# @agents(earth-loc)
++# EarthLocation and geodetic helpers for observer positions on Earth.
++# Feeds topocentric ITRS and observed transforms.
++# Related: astropy/coordinates/builtin_frames/itrs.py#itrs-frame, astropy/coordinates/builtin_frames/cirs_observed_transforms.py#cirs-observed, astropy/coordinates/attributes.py#coord-attrs
++#
+ from warnings import warn
+ import collections
+ import socket
+diff --git a/astropy/coordinates/errors.py b/astropy/coordinates/errors.py
+index fc7aaa829f..fc7aa38bb3 100644
+--- a/astropy/coordinates/errors.py
++++ b/astropy/coordinates/errors.py
+@@ -1,5 +1,10 @@
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
++# @agents(coord-errors)
++# Coordinate-specific exceptions raised during transform and frame setup.
++# Boundary for debugging frame graph issues.
++# Related: astropy/coordinates/baseframe.py#base-frame, astropy/coordinates/transformations.py#transforms-graph
++#
+ ''' This module defines custom errors and exceptions used in astropy.coordinates.
+ '''
+ 
+diff --git a/astropy/coordinates/matrix_utilities.py b/astropy/coordinates/matrix_utilities.py
+index 0b5791307b..ebb0e4860b 100644
+--- a/astropy/coordinates/matrix_utilities.py
++++ b/astropy/coordinates/matrix_utilities.py
+@@ -1,5 +1,10 @@
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
++# @agents(matrix-utils)
++# Rotation matrix helpers shared by frame transform definitions.
++# Used by intermediate_rotation_transforms.
++# Related: astropy/coordinates/transformations.py#transforms-graph, astropy/coordinates/builtin_frames/intermediate_rotation_transforms.py#intermediate-rot
++#
+ """
+ Utililies used for constructing and inspecting rotation matrices.
+ """
+diff --git a/astropy/coordinates/transformations.py b/astropy/coordinates/transformations.py
+index b34f335328..18ae4850a0 100644
+--- a/astropy/coordinates/transformations.py
++++ b/astropy/coordinates/transformations.py
+@@ -1,5 +1,10 @@
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
++# @agents(transforms-graph)
++# Frame transform graph registry and composite transform builder.
++# Builtin frame modules register matrix/function transforms.
++# Related: astropy/coordinates/baseframe.py#base-frame, astropy/coordinates/matrix_utilities.py#matrix-utils, astropy/coordinates/builtin_frames/intermediate_rotation_transforms.py#intermediate-rot
++#
+ """
+ This module contains a general framework for defining graphs of transformations
+ between coordinates, suitable for either spatial coordinates or more generalized

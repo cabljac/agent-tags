@@ -17,6 +17,7 @@ if [ -f "$TASK_FILE" ]; then
   echo "Task metadata already exists: $TASK_FILE"
 else
   echo "==> Downloading task metadata from SWE-bench Verified..."
+  echo "    (requires: pip install datasets)"
   python3 -c "
 import json
 from datasets import load_dataset
@@ -31,6 +32,7 @@ else:
     print('ERROR: ${TASK_ID} not found in SWE-bench Verified')
     exit(1)
 "
+  python3 "$EVAL_DIR/scripts/manifest_update.py" "$TASK_ID" metadata-downloaded || true
 fi
 
 # Step 2: Show task info
@@ -82,12 +84,20 @@ echo "     - Add an AGENTS.md at the repo root"
 echo "     - Don't mention the bug or fix in the tags"
 echo "  3. Generate the patch:"
 echo "     cd $FIXTURE_DIR"
-echo "     git add AGENTS.md  # stage new file"
+echo "     git add -A   # AGENTS.md + all tagged files"
 echo "     (git diff; git diff --cached) > $TAG_PATCH"
-echo "  4. Clean up: rm -rf $FIXTURE_DIR"
+echo ""
+echo "     Or bootstrap a first draft (review before commit):"
+echo "       python3 $EVAL_DIR/scripts/generate_tag_fixture.py $TASK_ID"
+echo "  4. Register the fixture in tasks/manifest.json (cohort + status), e.g.:"
+echo "       python3 $EVAL_DIR/scripts/manifest_update.py $TASK_ID fixture-authored --cohort initial"
+echo "  5. Clean up: rm -rf $FIXTURE_DIR"
 echo ""
 echo "  Then run the eval:"
+echo "     ./scripts/validate_fixture.sh $TASK_ID"
 echo "     ./scripts/run_eval.sh $TASK_ID baseline 1"
 echo "     ./scripts/run_eval.sh $TASK_ID with-tags 1"
+echo "     ./scripts/evaluate.sh $TASK_ID baseline 1"
+echo "     ./scripts/evaluate.sh $TASK_ID with-tags 1"
 echo "     ./scripts/compare.sh $TASK_ID"
 echo ""
