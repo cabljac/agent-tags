@@ -3,6 +3,7 @@
 AI coding agents waste most of their tokens *finding* the right code, not writing it. File localization is the bottleneck — not generation. `@agents` tags fix this by embedding context directly in source code: what a file does, what it relates to, and what constraints apply.
 
 No AST parsing. No infrastructure. Works in any language. Grep-fast.
+Learn more at [agenttags.dev](https://agenttags.dev).
 
 ## The problem
 
