@@ -20,6 +20,8 @@ git agent-tags context --for <file> --hops 1
 
 This outputs all `@agents` tags from the file and its immediate neighbors in the reference graph. Read this output and use it to understand constraints, related files, and warnings before making changes.
 
+Use `--hops 0` for just the file itself, or `--hops 2` for a deeper walk.
+
 If `git-agent-tags` is not installed, fall back to scanning the first 30 lines of the file for an `@agents` block and reading it manually.
 
 ## After editing files
@@ -183,6 +185,15 @@ git agent-tags broken                           # broken references only
 git agent-tags missing                          # files without headers
 git agent-tags suggest                          # suggest Related: from co-changes
 git agent-tags graph <file>                     # reference graph for a file
+git agent-tags coverage                         # file + line coverage metrics
+git agent-tags coverage --json                  # machine-readable coverage
+git agent-tags index                            # build SQLite index
+git agent-tags query search <term>              # full-text search across tags
+git agent-tags query deps <file>                # outgoing dependencies
+git agent-tags query rdeps <file>               # reverse dependencies
+git agent-tags query file <file>                # all tags for a file
+git agent-tags query uncovered                  # untagged files by size
+git agent-tags query sql "<sql>"                # arbitrary read-only SQL
 git agent-tags hook --install                   # install pre-commit hook
 ```
 
@@ -195,4 +206,4 @@ git agent-tags hook --install                   # install pre-commit hook
 - A file can have at most one header but any number of inline tags.
 - Tag names are case-sensitive. `token-check` and `Token-Check` are different names.
 
-For the full specification, read [references/SPEC.md](references/SPEC.md).
+For the full specification, read [SPEC.md](references/SPEC.md).

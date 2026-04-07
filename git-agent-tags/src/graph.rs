@@ -71,6 +71,41 @@ impl ReferenceGraph {
         self.reverse.get(file).cloned().unwrap_or_default()
     }
 
+    /// BFS walk from a starting file, following both directions up to `hops` edges.
+    /// Returns all files reachable within the hop limit (including the start file).
+    pub fn neighborhood(&self, start: &str, hops: usize) -> Vec<String> {
+        use std::collections::VecDeque;
+
+        let mut visited: HashSet<String> = HashSet::new();
+        let mut queue: VecDeque<(String, usize)> = VecDeque::new();
+
+        visited.insert(start.to_string());
+        queue.push_back((start.to_string(), 0));
+
+        while let Some((file, depth)) = queue.pop_front() {
+            if depth >= hops {
+                continue;
+            }
+            // Outgoing edges — strip fragments for file-level matching
+            for dep in self.dependencies(&file) {
+                let base = dep.split_once('#').map_or(dep.as_str(), |(b, _)| b);
+                if visited.insert(base.to_string()) {
+                    queue.push_back((base.to_string(), depth + 1));
+                }
+            }
+            // Incoming edges
+            for dep in self.dependents(&file) {
+                if visited.insert(dep.clone()) {
+                    queue.push_back((dep, depth + 1));
+                }
+            }
+        }
+
+        let mut result: Vec<String> = visited.into_iter().collect();
+        result.sort();
+        result
+    }
+
     /// Files with headers but no incoming or outgoing links.
     #[allow(dead_code)]
     pub fn orphans(&self) -> Vec<String> {
