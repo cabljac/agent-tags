@@ -337,6 +337,13 @@ export const prerender = true;
       font-family: var(--mono); font-size: 0.95rem; color: var(--text);
     }
     .install-cmd .dollar { color: var(--accent); user-select: none; }
+    .copy-btn {
+      background: none; border: 1px solid var(--border); border-radius: 4px;
+      color: var(--text-muted); cursor: pointer; padding: 4px 6px;
+      display: flex; align-items: center; transition: all 0.15s;
+    }
+    .copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+    .copy-btn.copied { color: var(--accent); border-color: var(--accent); }
     .install-alt {
       margin-top: 1.5rem; font-size: 0.8rem; color: var(--text-muted);
     }
@@ -576,8 +583,11 @@ export const prerender = true;
   <section class="install">
     <h2>Get started in seconds</h2>
     <p class="install-sub">Works with any language. No configuration needed.</p>
-    <div class="install-cmd">
+    <div class="install-cmd" id="install-cmd">
       <span class="dollar">$</span> npm install -g agent-tags
+      <button class="copy-btn" id="copy-btn" aria-label="Copy to clipboard">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      </button>
     </div>
     <p class="install-alt">Or build from source: <code>cargo install --path git-agent-tags</code></p>
   </section>
@@ -648,6 +658,23 @@ export const prerender = true;
   </footer>
 
   <script is:inline>
+    // ── Copy button ──
+    (function() {
+      var btn = document.getElementById('copy-btn');
+      if (btn) {
+        btn.addEventListener('click', function() {
+          navigator.clipboard.writeText('npm install -g agent-tags').then(function() {
+            btn.classList.add('copied');
+            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+            setTimeout(function() {
+              btn.classList.remove('copied');
+              btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+            }, 2000);
+          });
+        });
+      }
+    })();
+
     // ── Metallic text follows mouse ──
     (function() {
       var h1 = document.querySelector('.hero h1');
