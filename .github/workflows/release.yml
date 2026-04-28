@@ -82,6 +82,7 @@ jobs:
           if [[ "${{ matrix.os }}" == windows-* ]]; then
             ext=".exe"
           fi
+          mkdir -p "npm/${{ matrix.npm-pkg }}/bin"
           cp "git-agent-tags/target/${{ matrix.target }}/release/git-agent-tags${ext}" \
              "npm/${{ matrix.npm-pkg }}/bin/git-agent-tags${ext}"
 
