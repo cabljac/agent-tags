@@ -1,8 +1,9 @@
 /**
  * @agents
- * Extracts @agents blocks from source files.
- * Handles all supported comment styles based on file extension.
- * Related: git-agent-tags/src/graph.rs, git-agent-tags/src/cache.rs
+ * Extracts @agents blocks from source files: file headers, inline tags, and named range markers (start/end).
+ * Output is a unified Vec<AgentsTag> with TagKind variants; also exposes generate_header() to format new headers in the right comment style.
+ * Handles all supported comment styles based on file extension. Comment-prefix stripping is regex-only — don't introduce language-specific AST parsing here.
+ * Related: git-agent-tags/src/graph.rs, git-agent-tags/src/cache.rs, git-agent-tags/src/coverage.rs
  */
 
 use std::path::Path;

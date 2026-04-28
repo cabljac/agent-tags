@@ -1,8 +1,9 @@
 /**
  * @agents
- * Warning/detection logic combining parser, graph, and git heuristics.
- * Produces tiered output: broken refs, stale headers, suggestions.
- * Related: git-agent-tags/src/parser.rs, git-agent-tags/src/graph.rs, git-agent-tags/src/git.rs, git-agent-tags/src/cache.rs
+ * Warning/detection logic combining parser, graph, git, and regex heuristics.
+ * Produces tiered output: broken refs (Broken), stale headers via Tier 1 file-level git diff % and Tier 2 regex churn over the header's anchoring SHA (Stale), plus co-change-graph and rename suggestions (Info).
+ * Tier 1 staleness threshold comes from .git-agent-tags.toml (default 20%) — see config.rs.
+ * Related: git-agent-tags/src/parser.rs, git-agent-tags/src/graph.rs, git-agent-tags/src/git.rs, git-agent-tags/src/cache.rs, git-agent-tags/src/config.rs
  */
 
 use std::collections::{HashMap, HashSet};
