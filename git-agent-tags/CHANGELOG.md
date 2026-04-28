@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/cabljac/agent-tags/compare/v0.1.3...v0.1.4) (2026-04-28)
+
+
+### Bug Fixes
+
+* bump CI Node to 24 for bundled npm 11+, document MSRV ([21f54c7](https://github.com/cabljac/agent-tags/commit/21f54c7d1789fdf5a4b7237c591c3ab8550b0835))
+
 ## [0.1.3](https://github.com/cabljac/agent-tags/compare/v0.1.2...v0.1.3) (2026-04-28)
 
 
