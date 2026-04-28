@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/cabljac/agent-tags/compare/v0.1.2...v0.1.3) (2026-04-28)
+
+
+### Bug Fixes
+
+* drop git2 default features and mkdir bin/ before cp ([48bbad0](https://github.com/cabljac/agent-tags/commit/48bbad0736b22f1160cda19a3461def16786c372))
+
 ## [0.1.2](https://github.com/cabljac/agent-tags/compare/v0.1.1...v0.1.2) (2026-04-28)
 
 
