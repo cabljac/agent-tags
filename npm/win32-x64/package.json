@@ -2,12 +2,18 @@
   "name": "agent-tags-win32-x64",
   "version": "0.1.0",
   "description": "agent-tags binary for Windows x64",
-  "os": ["win32"],
-  "cpu": ["x64"],
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/cabljac/agent-tags"
+    "url": "git+https://github.com/cabljac/agent-tags.git"
   },
-  "files": ["bin"]
+  "files": [
+    "bin"
+  ]
 }

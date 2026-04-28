@@ -75,13 +75,19 @@ This turns tags into a self-maintaining system: agents read tags for context, th
 ### Install the CLI
 
 ```bash
-# From source
+# Via npm (recommended)
+npm install -g agent-tags
+```
+
+Or from source with Cargo:
+
+```bash
 git clone https://github.com/cabljac/agent-tags.git
 cd agent-tags/git-agent-tags
 cargo install --path .
 ```
 
-This installs `git-agent-tags` as a git subcommand.
+Either install exposes `git-agent-tags` as a git subcommand (and `agent-tags` as a direct binary).
 
 ### Tag your repo
 

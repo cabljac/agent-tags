@@ -2,12 +2,18 @@
   "name": "agent-tags-linux-arm64",
   "version": "0.1.0",
   "description": "agent-tags binary for Linux ARM64",
-  "os": ["linux"],
-  "cpu": ["arm64"],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/cabljac/agent-tags"
+    "url": "git+https://github.com/cabljac/agent-tags.git"
   },
-  "files": ["bin"]
+  "files": [
+    "bin"
+  ]
 }

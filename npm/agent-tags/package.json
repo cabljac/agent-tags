@@ -15,12 +15,13 @@
   "homepage": "https://agenttags.dev",
   "repository": {
     "type": "git",
-    "url": "https://github.com/cabljac/agent-tags"
+    "url": "git+https://github.com/cabljac/agent-tags.git"
   },
   "license": "MIT",
   "author": "Jacob Cable",
   "bin": {
-    "agent-tags": "bin/agent-tags.js"
+    "agent-tags": "bin/agent-tags.js",
+    "git-agent-tags": "bin/agent-tags.js"
   },
   "files": [
     "bin",
@@ -30,7 +31,6 @@
     "agent-tags-darwin-arm64": "0.1.0",
     "agent-tags-darwin-x64": "0.1.0",
     "agent-tags-linux-x64": "0.1.0",
-    "agent-tags-linux-arm64": "0.1.0",
-    "agent-tags-win32-x64": "0.1.0"
+    "agent-tags-linux-arm64": "0.1.0"
   }
 }

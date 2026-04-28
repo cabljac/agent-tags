@@ -2,18 +2,35 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
 
 permissions:
   contents: write
+  pull-requests: write
+  id-token: write
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  release-please:
+    name: release-please
+    runs-on: ubuntu-22.04
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
   build:
     name: Build ${{ matrix.name }}
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -35,13 +52,11 @@ jobs:
             os: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
             npm-pkg: linux-arm64
-          - name: win32-x64
-            os: windows-2022
-            target: x86_64-pc-windows-msvc
-            npm-pkg: win32-x64
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -78,15 +93,21 @@ jobs:
 
   publish:
     name: Publish to npm
-    needs: build
+    needs: [release-please, build]
+    if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
+
+      - name: Upgrade npm for Trusted Publishing
+        run: npm install -g npm@latest
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -95,17 +116,18 @@ jobs:
 
       - name: Copy binaries into npm packages
         run: |
-          for pkg in darwin-arm64 darwin-x64 linux-x64 linux-arm64 win32-x64; do
+          for pkg in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
             cp -r artifacts/npm-${pkg}/* npm/${pkg}/
             chmod +x npm/${pkg}/bin/* 2>/dev/null || true
           done
 
       - name: Set version from tag
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
+          TAG=${{ needs.release-please.outputs.tag_name }}
+          VERSION=${TAG#v}
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           # Update all package.json versions
-          for dir in npm/agent-tags npm/darwin-arm64 npm/darwin-x64 npm/linux-x64 npm/linux-arm64 npm/win32-x64; do
+          for dir in npm/agent-tags npm/darwin-arm64 npm/darwin-x64 npm/linux-x64 npm/linux-arm64; do
             cd $dir
             npm version $VERSION --no-git-tag-version --allow-same-version
             cd $GITHUB_WORKSPACE
@@ -121,23 +143,14 @@ jobs:
           "
 
       - name: Publish platform packages
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          for pkg in darwin-arm64 darwin-x64 linux-x64 linux-arm64 win32-x64; do
+          for pkg in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
             cd npm/${pkg}
-            npm publish --access public || true
+            npm publish --access public --provenance
             cd $GITHUB_WORKSPACE
           done
 
       - name: Publish main package
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           cd npm/agent-tags
-          npm publish --access public
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
+          npm publish --access public --provenance

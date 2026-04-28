@@ -16,9 +16,11 @@ function getBinaryPath() {
     // Fallback: check if git-agent-tags is on PATH (cargo install)
     try {
       const { execFileSync } = require("child_process");
-      return execFileSync("which", ["git-agent-tags"], {
+      const found = execFileSync("which", ["git-agent-tags"], {
         encoding: "utf-8",
       }).trim();
+      // Skip if it resolves to this wrapper script
+      if (found !== __filename) return found;
     } catch {}
 
     console.error(
